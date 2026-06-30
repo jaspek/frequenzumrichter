@@ -1,4 +1,4 @@
-"""Tests für die Motormodelle (Asynchron- und Synchronmaschine)."""
+"""Tests for the motor models (induction and synchronous machine)."""
 
 import numpy as np
 import pytest
@@ -18,7 +18,7 @@ def test_pmsm_at_rest_stays_at_rest():
 
 
 def test_pmsm_torque_sign():
-    """Positiver q-Strom erzeugt positives Drehmoment."""
+    """A positive q-current produces a positive torque."""
     m = PMSM()
     x = np.array([0.0, 1.0, 0.0, 0.0])  # i_q = 1 A
     assert m.torque(x) > 0
@@ -27,16 +27,16 @@ def test_pmsm_torque_sign():
 
 
 def test_pmsm_synchronizes_to_rotating_field():
-    """Bei offenem Drehfeld (V/f-artiger Anlauf) läuft der Rotor synchron mit.
+    """With an open-loop rotating field (V/f-type start-up) the rotor runs in synchronism.
 
-    Ein konstanter Spannungs-*Raumzeiger* würde den Rotor nur in eine Raststellung
-    ziehen. Erst ein **rotierendes** Drehfeld erzeugt eine kontinuierliche
-    Drehung; die Synchronmaschine läuft dann mit ``ω_m = ω_e / p``.
+    A constant voltage *space vector* would only pull the rotor into a detent
+    position. Only a **rotating** field produces continuous rotation; the
+    synchronous machine then runs at ``ω_m = ω_e / p``.
     """
     m = PMSM(friction=0.0)
     x = m.initial_state()
     dt = 1e-5
-    f_e = 3.0  # elektrische Frequenz [Hz]
+    f_e = 3.0  # electrical frequency [Hz]
     omega_e = 2 * np.pi * f_e
     t = 0.0
     for _ in range(60000):  # 0.6 s
@@ -47,20 +47,20 @@ def test_pmsm_synchronizes_to_rotating_field():
     meas = m.measurements(x)
     expected = omega_e / m.pole_pairs
     assert meas.omega_m == pytest.approx(expected, abs=0.5)
-    assert meas.omega_m > 1.0  # Rotor dreht kontinuierlich
+    assert meas.omega_m > 1.0  # rotor rotates continuously
 
 
 def test_pmsm_reluctance_torque_when_saliency():
-    """Bei L_d != L_q trägt das Reluktanzmoment zum Drehmoment bei."""
+    """For L_d != L_q the reluctance torque contributes to the torque."""
     m = PMSM(l_d=0.004, l_q=0.008)
-    x = np.array([-1.0, 2.0, 0.0, 0.0])  # i_d<0 erhöht bei L_q>L_d das Moment
+    x = np.array([-1.0, 2.0, 0.0, 0.0])  # for L_q>L_d, i_d<0 increases the torque
     t_total = m.torque(x)
     t_magnet = 1.5 * m.pole_pairs * m.flux_linkage * 2.0
     assert t_total != pytest.approx(t_magnet)
 
 
 # --------------------------------------------------------------------------- #
-# Asynchronmaschine
+# Induction machine
 # --------------------------------------------------------------------------- #
 def test_induction_at_rest_stays_at_rest():
     m = InductionMotor()
@@ -76,7 +76,7 @@ def test_induction_parameters_derived():
 
 
 def test_induction_flux_builds_up_with_dc_excitation():
-    """Eine konstante αβ-Spannung baut einen Rotorfluss auf."""
+    """A constant αβ voltage builds up a rotor flux."""
     m = InductionMotor()
     x = m.initial_state()
     dt = 1e-5
@@ -87,16 +87,16 @@ def test_induction_flux_builds_up_with_dc_excitation():
 
 
 def test_induction_no_torque_without_flux():
-    """Ohne Rotorfluss kein Drehmoment."""
+    """No torque without rotor flux."""
     m = InductionMotor()
     x = m.initial_state()
     assert m.torque(x) == pytest.approx(0.0)
 
 
 def test_measurements_currents_consistent():
-    """Die zurückgegebenen abc-Ströme müssen über Clarke zu i_alpha/i_beta passen."""
+    """The returned abc currents must match i_alpha/i_beta via the Clarke transform."""
     m = PMSM()
     x = np.array([1.0, 0.5, 10.0, 0.3])
     meas = m.measurements(x)
-    # Summe der drei Strangströme = 0 (symmetrisch, kein Nullsystem)
+    # Sum of the three phase currents = 0 (symmetric, no zero-sequence component)
     assert sum(meas.i_abc) == pytest.approx(0.0, abs=1e-9)

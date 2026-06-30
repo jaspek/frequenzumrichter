@@ -1,20 +1,20 @@
-"""Gesamtmodell des Frequenzumrichters (Antriebsstrang).
+"""Overall model of the variable-frequency drive (drivetrain).
 
-Die Klasse :class:`Frequenzumrichter` verbindet alle Teilkomponenten zu einem
-geschlossenen Antriebssystem:
+The :class:`Frequenzumrichter` class connects all subcomponents into a
+closed drive system:
 
-    Gleichrichter -> Zwischenkreis -> Wechselrichter -> Regelung -> Motor
+    rectifier -> DC link -> inverter -> control -> motor
 
-und stellt eine einfache Schnittstelle bereit, um das System Schritt für Schritt
-(:meth:`step`) oder über eine ganze Trajektorie (:meth:`run`) zu simulieren.
+and provides a simple interface to simulate the system step by step
+(:meth:`step`) or over an entire trajectory (:meth:`run`).
 
-Typische Verwendung::
+Typical usage::
 
     from frequenzumrichter import Frequenzumrichter, build_vf_drive
 
     fu = build_vf_drive()
     result = fu.run(t_end=2.0, speed_ref=lambda t: 150.0, load_torque=2.0)
-    print("Enddrehzahl:", result.speed[-1])
+    print("Final speed:", result.speed[-1])
 """
 
 from __future__ import annotations
@@ -36,7 +36,7 @@ __all__ = ["Controller", "Motor", "Frequenzumrichter"]
 
 
 class Motor(Protocol):
-    """Schnittstelle, die ein Motormodell für die Simulation erfüllen muss."""
+    """Interface that a motor model must satisfy for the simulation."""
 
     n_states: int
 
@@ -50,7 +50,7 @@ class Motor(Protocol):
 
 
 class Controller(Protocol):
-    """Schnittstelle eines Regelverfahrens (U/f oder FOC)."""
+    """Interface of a control method (V/f or FOC)."""
 
     def reset(self) -> None: ...
 
@@ -64,22 +64,22 @@ class Controller(Protocol):
 
 
 def _as_callable(value) -> Callable[[float], float]:
-    """Erlaubt sowohl konstante Werte als auch Zeitfunktionen ``f(t)``."""
+    """Allows both constant values and time functions ``f(t)``."""
     if callable(value):
         return value
     return lambda _t: float(value)
 
 
 def _resolve_load(load_torque, t: float, meas: MotorMeasurements) -> float:
-    """Wertet die Lastvorgabe aus.
+    """Evaluates the load specification.
 
-    ``load_torque`` darf sein:
+    ``load_torque`` may be:
 
-    * eine Konstante (z.B. ``2.0``),
-    * eine Zeitfunktion ``f(t)``,
-    * eine zustandsabhängige Funktion ``f(t, meas)`` – damit lassen sich
-      *passive* Lasten (Lüfter/Pumpe ∝ ω², Reibung) abbilden, die bei
-      Stillstand verschwinden.
+    * a constant (e.g. ``2.0``),
+    * a time function ``f(t)``,
+    * a state-dependent function ``f(t, meas)`` – this can model
+      *passive* loads (fan/pump ∝ ω², friction) that vanish at
+      standstill.
     """
     if not callable(load_torque):
         return float(load_torque)
@@ -91,26 +91,26 @@ def _resolve_load(load_torque, t: float, meas: MotorMeasurements) -> float:
 
 @dataclass
 class Frequenzumrichter:
-    """Vollständiges Frequenzumrichter-Antriebsmodell.
+    """Complete variable-frequency drive model.
 
     Parameters
     ----------
     motor:
-        Das Motormodell (Asynchron- oder Synchronmaschine).
+        The motor model (induction or synchronous machine).
     controller:
-        Das Regelverfahren (:class:`~frequenzumrichter.vf_control.VFControl`,
-        :class:`~frequenzumrichter.foc.FOCPMSM` oder
+        The control method (:class:`~frequenzumrichter.vf_control.VFControl`,
+        :class:`~frequenzumrichter.foc.FOCPMSM` or
         :class:`~frequenzumrichter.foc.FOCInduction`).
     inverter:
-        Der Wechselrichter (Mittelwertmodell mit SVPWM).
+        The inverter (averaged model with SVPWM).
     dc_link:
-        Der Zwischenkreis.
+        The DC link.
     rectifier:
-        Optionaler Gleichrichter (nur informativ / zur Spannungsvorgabe).
+        Optional rectifier (informational only / for voltage specification).
     protection:
-        Optionale Schutzeinrichtung.
+        Optional protection device.
     control_period:
-        Abtastzeit der Regelung [s]. Standard 100 µs (10 kHz).
+        Sampling time of the control [s]. Default 100 µs (10 kHz).
     """
 
     motor: Motor
@@ -128,10 +128,10 @@ class Frequenzumrichter:
         self.state = self.motor.initial_state()
 
     # ------------------------------------------------------------------ #
-    # Zustandsführung
+    # State management
     # ------------------------------------------------------------------ #
     def reset(self) -> None:
-        """Setzt Motor, Regler, Schutz und Zwischenkreis in den Anfangszustand."""
+        """Resets motor, controller, protection and DC link to the initial state."""
         self.state = self.motor.initial_state()
         self.time = 0.0
         self.controller.reset()
@@ -144,15 +144,15 @@ class Frequenzumrichter:
         return self.motor.measurements(self.state)
 
     # ------------------------------------------------------------------ #
-    # Simulationsschritt
+    # Simulation step
     # ------------------------------------------------------------------ #
     def step(self, speed_ref: float, load_torque: float, dt: float) -> dict:
-        """Führt einen Regel-/Integrationsschritt der Dauer ``dt`` aus.
+        """Performs one control/integration step of duration ``dt``.
 
         Returns
         -------
         dict
-            Momentaufnahme der wichtigsten Größen (für die Aufzeichnung).
+            Snapshot of the most important quantities (for recording).
         """
         meas = self.motor.measurements(self.state)
         v_dc = self.dc_link.voltage
@@ -163,7 +163,7 @@ class Frequenzumrichter:
             tripped = self.protection.check(i_mag, v_dc, meas.omega_m, dt)
 
         if tripped:
-            # Pulssperre: Wechselrichter gibt keine Spannung aus
+            # Pulse blocking: inverter outputs no voltage
             ctrl = ControlOutput(v_alpha_ref=0.0, v_beta_ref=0.0)
             inv = self.inverter.modulate(0.0, 0.0, v_dc, meas.i_alpha, meas.i_beta)
         else:
@@ -176,7 +176,7 @@ class Frequenzumrichter:
                 meas.i_beta,
             )
 
-        # Plant: Motor mit der tatsächlich gestellten Spannung integrieren (ZOH)
+        # Plant: integrate motor with the actually applied voltage (ZOH)
         self.state = rk4_step(
             self.motor.derivatives,
             self.state,
@@ -186,7 +186,7 @@ class Frequenzumrichter:
             load_torque,
         )
 
-        # Zwischenkreis aktualisieren (bei steifem Kreis konstant)
+        # Update DC link (constant for a stiff link)
         self.dc_link.update(inv.i_dc, dt)
         self.time += dt
 
@@ -211,7 +211,7 @@ class Frequenzumrichter:
         }
 
     # ------------------------------------------------------------------ #
-    # Trajektorien-Simulation
+    # Trajectory simulation
     # ------------------------------------------------------------------ #
     def run(
         self,
@@ -220,24 +220,24 @@ class Frequenzumrichter:
         load_torque=0.0,
         dt: float | None = None,
     ) -> SimulationResult:
-        """Simuliert den Antrieb von ``t=0`` bis ``t_end``.
+        """Simulates the drive from ``t=0`` to ``t_end``.
 
         Parameters
         ----------
         t_end:
-            Simulationsdauer [s].
+            Simulation duration [s].
         speed_ref:
-            Drehzahlsollwert [rad/s] – Konstante oder Funktion ``f(t)``.
+            Speed setpoint [rad/s] – constant or function ``f(t)``.
         load_torque:
-            Lastmoment [Nm] – Konstante, Funktion ``f(t)`` oder zustands­abhängige
-            Funktion ``f(t, meas)`` (z.B. für passive Lüfter-/Pumpenlasten).
+            Load torque [Nm] – constant, function ``f(t)`` or state-dependent
+            function ``f(t, meas)`` (e.g. for passive fan/pump loads).
         dt:
-            Schrittweite [s]; Standard ist :attr:`control_period`.
+            Step size [s]; default is :attr:`control_period`.
 
         Returns
         -------
         SimulationResult
-            Aufgezeichnete Zeitverläufe (als ``numpy``-Arrays).
+            Recorded time series (as ``numpy`` arrays).
         """
         dt = self.control_period if dt is None else dt
         speed_fn = _as_callable(speed_ref)

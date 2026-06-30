@@ -1,4 +1,4 @@
-"""Tests für die Clarke-/Park-Transformationen."""
+"""Tests for the Clarke/Park transformations."""
 
 import numpy as np
 import pytest
@@ -22,7 +22,7 @@ def balanced_abc(amplitude, theta):
 
 @pytest.mark.parametrize("theta", np.linspace(0, 2 * np.pi, 13))
 def test_clarke_amplitude_invariant(theta):
-    """Für ein symmetrisches System bleibt die Amplitude im αβ-System erhalten."""
+    """For a balanced system, the amplitude is preserved in the αβ frame."""
     amp = 7.5
     a, b, c = balanced_abc(amp, theta)
     alpha, beta = clarke(a, b, c)
@@ -47,7 +47,7 @@ def test_park_roundtrip(theta):
 
 
 def test_abc_to_dq_constant_for_synchronous_frame():
-    """Ein mit ω rotierendes System erscheint im mitrotierenden dq-System konstant."""
+    """A system rotating at ω appears constant in the co-rotating dq frame."""
     amp = 5.0
     for theta in np.linspace(0, 2 * np.pi, 17):
         a, b, c = balanced_abc(amp, theta)
@@ -65,7 +65,7 @@ def test_dq_to_abc_roundtrip():
 
 
 def test_transforms_vectorized():
-    """Die Funktionen müssen auch mit numpy-Arrays elementweise arbeiten."""
+    """The functions must also operate element-wise on numpy arrays."""
     theta = np.linspace(0, 2 * np.pi, 50)
     a, b, c = balanced_abc(2.0, theta)
     alpha, beta = clarke(a, b, c)

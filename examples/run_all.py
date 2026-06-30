@@ -1,6 +1,6 @@
-"""Führt alle Beispielskripte nacheinander aus und erzeugt die Plots.
+"""Runs all example scripts in sequence and generates the plots.
 
-Aufruf:  python examples/run_all.py
+Usage:  python examples/run_all.py
 """
 
 from __future__ import annotations
@@ -23,7 +23,7 @@ def main() -> None:
         module = importlib.import_module(name)
         module.main()
         print()
-    print("Alle Beispiele ausgeführt. Plots liegen in examples/output/.")
+    print("All examples executed. Plots are located in examples/output/.")
 
 
 if __name__ == "__main__":

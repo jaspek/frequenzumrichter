@@ -1,4 +1,4 @@
-"""Numerische Integration und Aufzeichnung der Simulationsergebnisse."""
+"""Numerical integration and recording of the simulation results."""
 
 from __future__ import annotations
 
@@ -16,24 +16,24 @@ def rk4_step(
     dt: float,
     *args,
 ) -> np.ndarray:
-    """Ein Integrationsschritt nach dem klassischen Runge-Kutta-Verfahren 4. Ordnung.
+    """A single integration step using the classical 4th-order Runge-Kutta method.
 
     Parameters
     ----------
     derivatives:
-        Funktion ``f(x, *args) -> dx/dt``.
+        Function ``f(x, *args) -> dx/dt``.
     x:
-        Aktueller Zustandsvektor.
+        Current state vector.
     dt:
-        Schrittweite [s].
+        Step size [s].
     *args:
-        Weitere, über den Schritt konstant gehaltene Argumente von
-        ``derivatives`` (Zero-Order-Hold der Stellgröße).
+        Additional arguments of ``derivatives`` that are held constant over
+        the step (zero-order hold of the manipulated variable).
 
     Returns
     -------
     numpy.ndarray
-        Der Zustandsvektor nach dem Zeitschritt.
+        The state vector after the time step.
     """
     k1 = derivatives(x, *args)
     k2 = derivatives(x + 0.5 * dt * k1, *args)
@@ -44,11 +44,11 @@ def rk4_step(
 
 @dataclass
 class SimulationResult:
-    """Sammelt die Zeitverläufe einer Simulation.
+    """Collects the time-domain traces of a simulation.
 
-    Die Felder werden während der Simulation Schritt für Schritt befüllt und am
-    Ende über :meth:`finalize` in ``numpy``-Arrays umgewandelt. Anschließend
-    lässt sich bequem auf die Verläufe zugreifen (z.B. ``result.speed``).
+    The fields are populated step by step during the simulation and are
+    converted into ``numpy`` arrays at the end via :meth:`finalize`. The traces
+    can then be accessed conveniently (e.g. ``result.speed``).
     """
 
     time: list[float] = field(default_factory=list)
@@ -69,24 +69,24 @@ class SimulationResult:
     thermal_state: list[float] = field(default_factory=list)
 
     def record(self, **values) -> None:
-        """Hängt einen Datensatz an. Unbekannte Schlüssel werden ignoriert."""
+        """Appends a data record. Unknown keys are ignored."""
         for key, value in values.items():
             target = getattr(self, key, None)
             if isinstance(target, list):
                 target.append(value)
 
     def finalize(self) -> "SimulationResult":
-        """Wandelt alle Listen in ``numpy``-Arrays um (in-place) und gibt self zurück."""
+        """Converts all lists into ``numpy`` arrays (in-place) and returns self."""
         for key, value in vars(self).items():
             if isinstance(value, list):
                 setattr(self, key, np.asarray(value))
         return self
 
     def settling_time(self, tolerance: float = 0.02) -> float | None:
-        """Schätzt die Ausregelzeit bezogen auf den letzten Drehzahlsollwert.
+        """Estimates the settling time relative to the last speed setpoint.
 
-        Liefert den Zeitpunkt, ab dem die Drehzahl dauerhaft innerhalb des
-        ``tolerance``-Bands (relativ zum Sollwert) bleibt, oder ``None``.
+        Returns the instant from which the speed stays permanently within the
+        ``tolerance`` band (relative to the setpoint), or ``None``.
         """
         time = np.asarray(self.time)
         speed = np.asarray(self.speed)

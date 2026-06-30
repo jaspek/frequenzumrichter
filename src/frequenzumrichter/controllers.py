@@ -1,8 +1,8 @@
-"""Regler-Bausteine: PI-Regler, Begrenzer und Filter.
+"""Controller building blocks: PI controller, limiter and filter.
 
-Die hier definierten Klassen bilden die zeitdiskreten Grundbausteine der
-Regelung eines Frequenzumrichters. Alle Regler arbeiten mit einer festen
-Abtastzeit ``dt``, die bei jedem Aufruf von :meth:`step` übergeben wird.
+The classes defined here form the discrete-time basic building blocks of the
+control of a variable-frequency drive. All controllers operate with a fixed
+sampling time ``dt``, which is passed on every call to :meth:`step`.
 """
 
 from __future__ import annotations
@@ -14,31 +14,31 @@ __all__ = ["PIController", "RateLimiter", "LowPassFilter"]
 
 @dataclass
 class PIController:
-    """Zeitdiskreter PI-Regler mit Stellgrößenbegrenzung und Anti-Windup.
+    """Discrete-time PI controller with control-output saturation and anti-windup.
 
-    Der Regler implementiert das Stellgesetz
+    The controller implements the control law
 
     .. math::
 
         u(t) = K_p \, e(t) + K_i \int e(\\tau)\, d\\tau
 
-    Die Integration erfolgt nach der Vorwärts-Euler-Methode. Gegen
-    Integrator-Windup wird *Back-Calculation* (Anti-Windup über die
-    Rückführung der Sättigungsdifferenz) eingesetzt: Sobald die Stellgröße in
-    die Begrenzung läuft, wird der Integralanteil entsprechend zurückgerechnet.
+    Integration uses the forward Euler method. To counter integrator windup,
+    *back-calculation* (anti-windup via feedback of the saturation difference)
+    is used: as soon as the control output runs into the limit, the integral
+    term is back-calculated accordingly.
 
     Parameters
     ----------
     kp:
-        Proportionalverstärkung.
+        Proportional gain.
     ki:
-        Integralverstärkung [1/s].
+        Integral gain [1/s].
     output_min, output_max:
-        Untere/obere Begrenzung der Stellgröße. ``None`` => unbegrenzt.
+        Lower/upper limit of the control output. ``None`` => unbounded.
     anti_windup_gain:
-        Verstärkung ``Kaw`` der Back-Calculation. Üblich ist ``1/Tt`` mit der
-        Nachstellzeit ``Tt``. ``0`` deaktiviert das Anti-Windup (reines Clamping
-        bleibt aktiv, sofern Begrenzungen gesetzt sind).
+        Gain ``Kaw`` of the back-calculation. A common choice is ``1/Tt`` with
+        the reset time ``Tt``. ``0`` disables anti-windup (pure clamping
+        remains active, provided limits are set).
     """
 
     kp: float
@@ -50,41 +50,41 @@ class PIController:
     _last_output: float = field(default=0.0, repr=False)
 
     def reset(self, integral: float = 0.0) -> None:
-        """Setzt den Integralspeicher (und damit den Regler) zurück."""
+        """Resets the integral store (and thus the controller)."""
         self.integral = integral
         self._last_output = 0.0
 
     def step(self, error: float, dt: float, feedforward: float = 0.0) -> float:
-        """Berechnet einen Reglerschritt.
+        """Computes one controller step.
 
         Parameters
         ----------
         error:
-            Regelabweichung ``sollwert - istwert``.
+            Control deviation ``setpoint - actual value``.
         dt:
-            Abtastzeit [s].
+            Sampling time [s].
         feedforward:
-            Optionaler Vorsteueranteil, der vor der Begrenzung addiert wird
-            (z.B. Entkopplungsterme bei der feldorientierten Regelung).
+            Optional feedforward term that is added before saturation
+            (e.g. decoupling terms in field-oriented control).
 
         Returns
         -------
         float
-            Die begrenzte Stellgröße.
+            The limited control output.
 
         Notes
         -----
-        :attr:`integral` enthält den bereits mit ``Ki`` gewichteten Integral­anteil
-        in Stellgrößen-Einheiten. Die Stellgröße wird zunächst aus dem aktuellen
-        Integralspeicher gebildet und begrenzt; anschließend wird der Speicher
-        per Back-Calculation aktualisiert. Läuft die Stellgröße in die Sättigung,
-        bremst der Term ``Kaw·(u_sat - u_unsat)`` das weitere Aufintegrieren
-        (Anti-Windup).
+        :attr:`integral` holds the integral term already weighted by ``Ki``
+        in control-output units. The control output is first formed from the
+        current integral store and limited; afterwards the store is updated
+        via back-calculation. If the control output runs into saturation, the
+        term ``Kaw·(u_sat - u_unsat)`` slows further integration
+        (anti-windup).
         """
         unbounded = self.kp * error + self.integral + feedforward
         bounded = self._clamp(unbounded)
 
-        # Integrator nach klassischer Back-Calculation aktualisieren
+        # Update integrator using classical back-calculation
         self.integral += (
             self.ki * error + self.anti_windup_gain * (bounded - unbounded)
         ) * dt
@@ -102,16 +102,16 @@ class PIController:
 
 @dataclass
 class RateLimiter:
-    """Begrenzt die Änderungsgeschwindigkeit eines Signals (Rampe).
+    """Limits the rate of change of a signal (ramp).
 
-    Wird typischerweise verwendet, um Sollwertsprünge (Drehzahl, Frequenz) in
-    sanfte Rampen zu wandeln und so Strom-/Drehmomentstöße zu vermeiden.
+    Typically used to convert setpoint steps (speed, frequency) into
+    smooth ramps and thus avoid current/torque surges.
 
     Parameters
     ----------
     rate_up, rate_down:
-        Maximale Anstiegs-/Abfallgeschwindigkeit [Einheit/s]. ``rate_down``
-        verwendet bei ``None`` denselben Wert wie ``rate_up``.
+        Maximum rising/falling rate [unit/s]. When ``None``, ``rate_down``
+        uses the same value as ``rate_up``.
     """
 
     rate_up: float
@@ -136,9 +136,9 @@ class RateLimiter:
 
 @dataclass
 class LowPassFilter:
-    """Zeitdiskretes PT1-Tiefpassfilter erster Ordnung.
+    """Discrete-time first-order PT1 low-pass filter.
 
-    Realisiert ``G(s) = 1 / (1 + s*tau)`` mittels Vorwärts-Euler-Diskretisierung.
+    Realizes ``G(s) = 1 / (1 + s*tau)`` via forward Euler discretization.
     """
 
     tau: float

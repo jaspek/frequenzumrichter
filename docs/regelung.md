@@ -1,129 +1,129 @@
-# Regelungsverfahren
+# Control Methods
 
-Der Frequenzumrichter muss aus dem Drehzahl-Sollwert die richtigen
-Wechselrichter-Spannungen berechnen. Dafür sind zwei grundlegend verschiedene
-Verfahren implementiert: die **skalare U/f-Steuerung** und die **feldorientierte
-Regelung (FOC)**.
+The frequency converter must compute the correct inverter voltages from the
+speed setpoint. Two fundamentally different methods are implemented for this: the
+**scalar V/f control** and **field-oriented control (FOC)**.
 
 ---
 
-## 1. Skalare U/f-Steuerung
+## 1. Scalar V/f Control
 
-Die einfachste Methode hält das Verhältnis von Spannung zu Frequenz konstant,
-damit der magnetische Fluss (und damit das verfügbare Drehmoment) über den
-Drehzahlbereich annähernd gleich bleibt:
+The simplest method keeps the voltage-to-frequency ratio constant, so that the
+magnetic flux (and thus the available torque) stays approximately the same across
+the speed range:
 
-$$ U(f) = U_{boost} + \frac{U_{nenn}}{f_{nenn}} \cdot f $$
+$$ U(f) = U_{boost} + \frac{U_{rated}}{f_{rated}} \cdot f $$
 
-* **Spannungsanhebung `U_boost`** kompensiert bei kleinen Frequenzen den ohmschen
-  Spannungsabfall am Statorwiderstand und sichert das Anlaufmoment.
-* Oberhalb der Nennfrequenz bleibt die Spannung konstant (Begrenzung durch den
-  Zwischenkreis) → **Feldschwächbereich** mit sinkendem Moment.
+* **Voltage boost `U_boost`** compensates for the ohmic voltage drop across the
+  stator resistance at low frequencies and secures the starting torque.
+* Above the rated frequency the voltage stays constant (limited by the
+  DC link) → **field-weakening range** with decreasing torque.
 
-Die U/f-Steuerung arbeitet **gesteuert** (ohne Rückführung): kein Strom-, kein
-Drehzahlgeber nötig. Die tatsächliche Drehzahl liegt lastabhängig um den
-**Schlupf** unter der Synchrondrehzahl. Das Verfahren ist extrem robust und
-preiswert – ideal für Lüfter, Pumpen und einfache Förderantriebe.
+V/f control operates in **open loop** (without feedback): no current or speed
+sensor is required. Depending on the load, the actual speed lies below the
+synchronous speed by the **slip**. The method is extremely robust and
+inexpensive – ideal for fans, pumps, and simple conveyor drives.
 
-→ Implementierung: `vf_control.VFControl`
+→ Implementation: `vf_control.VFControl`
 
 ```python
 from frequenzumrichter import build_vf_drive
 fu = build_vf_drive()
 result = fu.run(t_end=2.5, speed_ref=150.0, load_torque=3.0)
-# -> Enddrehzahl ≈ 149 rad/s (Synchrondrehzahl minus Schlupf)
+# -> Final speed ≈ 149 rad/s (synchronous speed minus slip)
 ```
 
-**Grenzen:** kein definiertes Drehmoment, schwaches Verhalten bei kleinen
-Drehzahlen, langsame Dynamik. Für hochdynamische oder positioniergenaue Antriebe
-ist die feldorientierte Regelung nötig.
+**Limitations:** no defined torque, weak behavior at low speeds, slow dynamics.
+For highly dynamic or position-accurate drives, field-oriented control is
+required.
 
 ---
 
-## 2. Feldorientierte Regelung (FOC / Vektorregelung)
+## 2. Field-Oriented Control (FOC / Vector Control)
 
-Die FOC überträgt das Prinzip der fremderregten Gleichstrommaschine auf die
-Drehfeldmaschine: In einem **rotierenden dq-Koordinatensystem**, das mit dem Fluss
-mitläuft, werden Fluss und Moment **entkoppelt** geregelt:
+FOC transfers the principle of the separately excited DC machine to the
+rotating-field machine: in a **rotating dq coordinate system** that runs along
+with the flux, flux and torque are controlled in a **decoupled** manner:
 
-* der **d-Strom** $i_d$ stellt den magnetischen Fluss,
-* der **q-Strom** $i_q$ stellt das Drehmoment $\;M = \tfrac{3}{2}p\,\psi\,i_q$.
+* the **d current** $i_d$ sets the magnetic flux,
+* the **q current** $i_q$ sets the torque $\;M = \tfrac{3}{2}p\,\psi\,i_q$.
 
-### Koordinatentransformationen
+### Coordinate Transformations
 
 ```
-abc ──Clarke──► αβ ──Park(θ)──► dq      (Messung)
-dq  ──Park⁻¹(θ)──► αβ ──SVPWM──► Brücke  (Stellgröße)
+abc ──Clarke──► αβ ──Park(θ)──► dq      (measurement)
+dq  ──Park⁻¹(θ)──► αβ ──SVPWM──► bridge  (control output)
 ```
 
-Der entscheidende Punkt ist der **Feldwinkel θ**:
+The decisive point is the **field angle θ**:
 
-* **PMSM** – der Fluss steht fest im Rotor, also ist $\theta_e = p\,\theta_m$
-  direkt aus der Rotorlage bekannt (Geber). Es gilt $i_d^* = 0$
-  (Oberflächen-PMSM); der gesamte Strom bildet Moment.
+* **PMSM** – the flux is fixed in the rotor, so $\theta_e = p\,\theta_m$
+  is known directly from the rotor position (encoder). Here $i_d^* = 0$ applies
+  (surface-mounted PMSM); the entire current produces torque.
   → `foc.FOCPMSM`
-* **Asynchronmaschine** – der Rotorfluss „schlüpft" gegenüber dem Rotor. Der
-  Feldwinkel wird **indirekt** über die Schlupfbeziehung berechnet (IRFOC):
+* **Induction machine** – the rotor flux "slips" relative to the rotor. The
+  field angle is computed **indirectly** via the slip relation (IRFOC):
 
   $$ \omega_{sl} = \frac{i_q^{*}}{\tau_r\, i_d^{*}}, \qquad
-     \theta_{feld} = \int \left(p\,\omega_m + \omega_{sl}\right) dt $$
+     \theta_{field} = \int \left(p\,\omega_m + \omega_{sl}\right) dt $$
 
-  Hier stellt $i_d^*$ den Rotorfluss ($\psi_r = L_m i_d^*$), $i_q^*$ das Moment.
+  Here $i_d^*$ sets the rotor flux ($\psi_r = L_m i_d^*$), and $i_q^*$ sets the
+  torque.
   → `foc.FOCInduction`
 
-### Kaskadenstruktur
+### Cascade Structure
 
 ```
- ω_soll ─►(PI Drehzahl)─► i_q* ─►(PI Strom q)─► v_q ┐
-                                                    ├─► Park⁻¹ ─► SVPWM
- i_d* ──────────────────►(PI Strom d)─► v_d ────────┘
+ ω_ref ─►(PI speed)──► i_q* ─►(PI current q)─► v_q ┐
+                                                  ├─► Park⁻¹ ─► SVPWM
+ i_d* ──────────────►(PI current d)─► v_d ────────┘
 ```
 
-* **Innere Stromregler** (schnell, ~kHz-Bandbreite) – nach dem *Betragsoptimum*
-  ausgelegt: $K_p = L\,\omega_c,\; K_i = R\,\omega_c$.
-* **Äußerer Drehzahlregler** (langsamer) – seine Stellgröße ist der
-  Soll-q-Strom, begrenzt auf den Maximalstrom (= Momentbegrenzung).
-* **Entkopplungs-Vorsteuerung** kompensiert die geschwindigkeitsproportionalen
-  Kreuzkopplungsterme ($\omega_e L_q i_q$ bzw. $\omega_e(L_d i_d + \psi_f)$) und
-  die Gegen-EMK – dadurch werden die beiden Stromregelkreise näherungsweise
-  linear und unabhängig.
-* **Spannungsbegrenzung** auf den Aussteuerkreis $V_{dc}/\sqrt3$ (Circle-Limiting,
-  `control_base.limit_vector`).
+* **Inner current controllers** (fast, ~kHz bandwidth) – designed according to
+  the *magnitude optimum*: $K_p = L\,\omega_c,\; K_i = R\,\omega_c$.
+* **Outer speed controller** (slower) – its control output is the
+  q-current reference, limited to the maximum current (= torque limit).
+* **Decoupling feedforward** compensates for the speed-proportional
+  cross-coupling terms ($\omega_e L_q i_q$ and $\omega_e(L_d i_d + \psi_f)$,
+  respectively) and the back-EMF – this makes the two current control loops
+  approximately linear and independent.
+* **Voltage limiting** to the modulation range circle $V_{dc}/\sqrt3$
+  (circle limiting, `control_base.limit_vector`).
 
-→ Reglerbaustein: `controllers.PIController` (mit Anti-Windup per
-Back-Calculation).
+→ Controller block: `controllers.PIController` (with anti-windup via
+back-calculation).
 
 ```python
 from frequenzumrichter import build_foc_pmsm_drive
 fu = build_foc_pmsm_drive()
 result = fu.run(t_end=0.5, speed_ref=100.0, load_torque=0.5)
-# -> Ausregelzeit < 30 ms, exakte Sollwertfolge, sauberer Lastausgleich
+# -> Settling time < 30 ms, exact setpoint tracking, clean load rejection
 ```
 
 ---
 
 ## 3. Anti-Windup
 
-Läuft die Stellgröße eines PI-Reglers in die Begrenzung (z.B. Stromgrenze bei
-starker Beschleunigung), würde der Integralanteil unkontrolliert weiter
-aufintegrieren (*Windup*) und nach dem Verlassen der Begrenzung ein großes
-Überschwingen verursachen. Die Implementierung nutzt **Back-Calculation**:
+If the control output of a PI controller runs into its limit (e.g. the current
+limit during strong acceleration), the integral term would keep integrating up
+uncontrolled (*windup*) and cause a large overshoot once the limit is left. The
+implementation uses **back-calculation**:
 
 $$ I_{k+1} = I_k + \Big(K_i\,e + K_{aw}\,(u_{sat} - u_{unsat})\Big)\,\Delta t $$
 
-Der Term $K_{aw}(u_{sat}-u_{unsat})$ ist nur in der Sättigung aktiv und führt den
-Integrator zurück, sodass der Regler beim Verlassen der Begrenzung sofort wieder
-reagiert.
+The term $K_{aw}(u_{sat}-u_{unsat})$ is only active during saturation and drives
+the integrator back, so that the controller responds immediately again once the
+limit is left.
 
 ---
 
-## Vergleich
+## Comparison
 
-| Eigenschaft | U/f-Steuerung | Feldorientierte Regelung |
+| Property | V/f Control | Field-Oriented Control |
 |-------------|:-------------:|:------------------------:|
-| Rückführung | keine | Strom + Lage/Drehzahl |
-| Dynamik | gering | sehr hoch |
-| Drehmoment bei n≈0 | schwach | volles Moment |
-| Genauigkeit | Schlupf-behaftet | exakt |
-| Aufwand | gering | hoch |
-| typische Anwendung | Pumpe, Lüfter | Servo, Traktion, Werkzeugmaschine |
+| Feedback | none | current + position/speed |
+| Dynamics | low | very high |
+| Torque at n≈0 | weak | full torque |
+| Accuracy | slip-affected | exact |
+| Effort | low | high |
+| Typical application | pump, fan | servo, traction, machine tool |

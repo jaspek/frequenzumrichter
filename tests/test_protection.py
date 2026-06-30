@@ -1,4 +1,4 @@
-"""Tests für die Schutzfunktionen."""
+"""Tests for the protection functions."""
 
 import pytest
 
@@ -51,10 +51,10 @@ def test_overspeed_trips():
 
 
 def test_thermal_overload_accumulates_then_trips():
-    """Dauerhafter Überstrom lädt das I²t-Modell, bis abgeschaltet wird."""
+    """Sustained overcurrent charges the I²t model until it trips."""
     p = make_protection()
     tripped = False
-    # 3·Nennstrom => starke Erwärmung; tau=1 s
+    # 3·rated current => strong heating; tau=1 s
     for _ in range(5000):
         tripped = p.check(current_magnitude=30.0, dc_voltage=560.0, speed=0.0, dt=1e-3)
         if tripped:
@@ -84,8 +84,8 @@ def test_reset_clears_faults():
 
 
 def test_trip_state_latches():
-    """Nach einem Trip bleibt der Fehler bis zum Reset bestehen."""
+    """After a trip the fault persists until reset."""
     p = make_protection()
     p.check(current_magnitude=60.0, dc_voltage=560.0, speed=0.0, dt=1e-3)
-    # auch bei wieder gesundem Strom bleibt getrippt
+    # remains tripped even when the current is healthy again
     assert p.check(current_magnitude=1.0, dc_voltage=560.0, speed=0.0, dt=1e-3)

@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "frequenzumrichter"
 version = "0.1.0"
-description = "Simulation eines Frequenzumrichters (VFD): Leistungsteil, U/f- und feldorientierte Regelung von Asynchron- und Synchronmaschinen."
+description = "Simulation of a variable-frequency drive (VFD): power stage, V/f and field-oriented control of induction and synchronous machines."
 readme = "README.md"
 requires-python = ">=3.9"
 license = { text = "MIT" }

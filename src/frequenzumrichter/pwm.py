@@ -1,19 +1,19 @@
-"""Pulsweitenmodulation (PWM) für die Wechselrichter-Brücke.
+"""Pulse-width modulation (PWM) for the inverter bridge.
 
-Implementiert die beiden in Frequenzumrichtern gebräuchlichsten
-Modulationsverfahren:
+Implements the two most common modulation methods used in
+variable-frequency drives:
 
-* **Sinus-PWM (SPWM)** – Vergleich dreier Sinus-Referenzen mit einem
-  Dreieck-Träger.
-* **Raumzeiger-Modulation (SVPWM)** – realisiert über die mathematisch
-  äquivalente *Min/Max*-Nullsystem-Injektion. Dadurch wird der lineare
-  Aussteuerbereich gegenüber der reinen Sinus-PWM um den Faktor
-  ``2/√3 ≈ 1.155`` erweitert (Phasenspannungsamplitude bis ``V_dc/√3``).
+* **Sinusoidal PWM (SPWM)** – comparison of three sinusoidal references with a
+  triangular carrier.
+* **Space-vector modulation (SVPWM)** – realized via the mathematically
+  equivalent *min/max* zero-sequence injection. This extends the linear
+  modulation range compared to pure sinusoidal PWM by a factor of
+  ``2/√3 ≈ 1.155`` (phase-voltage amplitude up to ``V_dc/√3``).
 
-Die Funktionen liefern *Tastverhältnisse* (Duty-Cycles) im Bereich
-``[0, 1]`` für die drei oberen Brückentransistoren. Aus diesen lässt sich mit
-:func:`inverter_voltages` die mittlere Strangspannung (Mittelwertmodell)
-zurückrechnen.
+The functions return *duty cycles* in the range
+``[0, 1]`` for the three upper bridge transistors. From these, the average
+phase voltage (averaged model) can be recovered with
+:func:`inverter_voltages`.
 """
 
 from __future__ import annotations
@@ -32,26 +32,26 @@ __all__ = [
     "MAX_LINEAR_SPWM",
 ]
 
-#: Maximale Phasenspannungsamplitude im linearen Bereich der SVPWM (= V_dc/√3).
+#: Maximum phase-voltage amplitude in the linear range of SVPWM (= V_dc/√3).
 MAX_LINEAR_SVPWM = 1.0 / np.sqrt(3.0)
-#: Maximale Phasenspannungsamplitude im linearen Bereich der Sinus-PWM (= V_dc/2).
+#: Maximum phase-voltage amplitude in the linear range of sinusoidal PWM (= V_dc/2).
 MAX_LINEAR_SPWM = 0.5
 
 
 def sinusoidal_pwm(v_a, v_b, v_c, v_dc):
-    """Sinus-PWM: berechnet Tastverhältnisse aus den Strang-Sollspannungen.
+    """Sinusoidal PWM: computes duty cycles from the reference phase voltages.
 
     Parameters
     ----------
     v_a, v_b, v_c:
-        Soll-Strangspannungen (gegen den virtuellen Sternpunkt) [V].
+        Reference phase voltages (relative to the virtual neutral point) [V].
     v_dc:
-        Zwischenkreis-Gleichspannung [V].
+        DC-link voltage [V].
 
     Returns
     -------
     (d_a, d_b, d_c):
-        Auf ``[0, 1]`` begrenzte Tastverhältnisse.
+        Duty cycles limited to ``[0, 1]``.
     """
     d_a = np.clip(0.5 + v_a / v_dc, 0.0, 1.0)
     d_b = np.clip(0.5 + v_b / v_dc, 0.0, 1.0)
@@ -60,25 +60,25 @@ def sinusoidal_pwm(v_a, v_b, v_c, v_dc):
 
 
 def svpwm_duty(v_alpha, v_beta, v_dc):
-    """Raumzeiger-Modulation über Min/Max-Injektion.
+    """Space-vector modulation via min/max injection.
 
     Parameters
     ----------
     v_alpha, v_beta:
-        Soll-Raumzeiger der Spannung im stationären αβ-System [V].
+        Reference voltage space vector in the stationary αβ frame [V].
     v_dc:
-        Zwischenkreisspannung [V].
+        DC-link voltage [V].
 
     Returns
     -------
     (d_a, d_b, d_c):
-        Tastverhältnisse im Bereich ``[0, 1]``.
+        Duty cycles in the range ``[0, 1]``.
 
     Notes
     -----
-    Die Injektion des Nullsystems ``v_off = -(max + min) / 2`` zentriert die
-    Strangspannungen symmetrisch um ``V_dc/2`` und entspricht exakt der
-    klassischen 7-Segment-Raumzeigermodulation (SVPWM).
+    Injecting the zero-sequence component ``v_off = -(max + min) / 2`` centers the
+    phase voltages symmetrically around ``V_dc/2`` and corresponds exactly to
+    the classic 7-segment space-vector modulation (SVPWM).
     """
     v_a, v_b, v_c = inverse_clarke(v_alpha, v_beta)
     v_max = np.maximum(np.maximum(v_a, v_b), v_c)
@@ -91,18 +91,18 @@ def svpwm_duty(v_alpha, v_beta, v_dc):
 
 
 def space_vector_pwm(v_alpha, v_beta, v_dc):
-    """Wie :func:`svpwm_duty`, gibt zusätzlich die realisierten αβ-Spannungen zurück.
+    """Like :func:`svpwm_duty`, but additionally returns the realized αβ voltages.
 
-    Durch die Begrenzung der Tastverhältnisse auf ``[0, 1]`` (Übermodulation)
-    kann die tatsächlich gestellte Spannung von der Sollspannung abweichen.
-    Diese *Ist*-Spannung wird mit zurückgegeben, damit die Regelung den
-    tatsächlich am Motor wirksamen Spannungsraumzeiger kennt.
+    Due to the limiting of the duty cycles to ``[0, 1]`` (overmodulation),
+    the actually applied voltage may deviate from the reference voltage.
+    This *actual* voltage is also returned so that the control knows the
+    voltage space vector that is actually effective at the motor.
 
     Returns
     -------
     (duties, v_alpha_act, v_beta_act):
-        ``duties`` ist das Tupel ``(d_a, d_b, d_c)``; ``v_*_act`` ist der
-        tatsächlich gestellte Spannungsraumzeiger [V].
+        ``duties`` is the tuple ``(d_a, d_b, d_c)``; ``v_*_act`` is the
+        actually applied voltage space vector [V].
     """
     duties = svpwm_duty(v_alpha, v_beta, v_dc)
     v_a, v_b, v_c = inverter_voltages(*duties, v_dc)
@@ -111,16 +111,16 @@ def space_vector_pwm(v_alpha, v_beta, v_dc):
 
 
 def inverter_voltages(d_a, d_b, d_c, v_dc):
-    """Mittlere Strangspannungen aus Tastverhältnissen (Mittelwertmodell).
+    """Average phase voltages from duty cycles (averaged model).
 
-    Die Spannung eines Brückenzweigs gegen den negativen Zwischenkreis-Pol ist
-    ``d_x * V_dc``. Für eine symmetrische Last (isolierter Sternpunkt) ergibt
-    sich die Strang-Sternpunkt-Spannung durch Abzug des Mittelwerts.
+    The voltage of a bridge leg relative to the negative DC-link pole is
+    ``d_x * V_dc``. For a symmetric load (isolated neutral point), the
+    phase-to-neutral voltage results from subtracting the mean value.
 
     Returns
     -------
     (v_a, v_b, v_c):
-        Strangspannungen gegen den Laststernpunkt [V].
+        Phase voltages relative to the load neutral point [V].
     """
     v_a0 = d_a * v_dc
     v_b0 = d_b * v_dc
@@ -130,9 +130,9 @@ def inverter_voltages(d_a, d_b, d_c, v_dc):
 
 
 def svpwm_sector(v_alpha, v_beta):
-    """Bestimmt den Sektor (1..6) des Spannungsraumzeigers im αβ-Diagramm.
+    """Determines the sector (1..6) of the voltage space vector in the αβ diagram.
 
-    Dient vor allem der Veranschaulichung der Raumzeigermodulation.
+    Primarily serves to illustrate the space-vector modulation.
     """
     angle = np.arctan2(v_beta, v_alpha)
     angle = np.mod(angle, 2.0 * np.pi)

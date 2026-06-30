@@ -1,25 +1,25 @@
-"""Feldorientierte Regelung (FOC / Vektorregelung).
+"""Field-oriented control (FOC / vector control).
 
-Die feldorientierte Regelung entkoppelt die Drehmoment- und Flussbildung einer
-Drehfeldmaschine, indem im rotorfluss- bzw. rotorlagefesten dq-Koordinatensystem
-geregelt wird:
+Field-oriented control decouples the torque and flux production of a rotating-field
+machine by controlling in the rotor-flux- or rotor-position-fixed dq coordinate
+system:
 
-* der **d-Strom** ``i_d`` bestimmt den magnetischen Fluss,
-* der **q-Strom** ``i_q`` bestimmt das Drehmoment.
+* the **d current** ``i_d`` determines the magnetic flux,
+* the **q current** ``i_q`` determines the torque.
 
-Damit lässt sich eine Drehfeldmaschine so präzise und dynamisch regeln wie eine
-fremderregte Gleichstrommaschine.
+This allows a rotating-field machine to be controlled as precisely and dynamically as
+a separately excited DC machine.
 
-Implementiert sind:
+Implemented are:
 
-* :class:`FOCPMSM` – feldorientierte Regelung der permanenterregten
-  Synchronmaschine (Rotorlage direkt verfügbar, ``i_d* = 0``).
-* :class:`FOCInduction` – indirekte rotorflussorientierte Regelung (IRFOC) der
-  Asynchronmaschine mit Schlupf-/Feldwinkelberechnung.
+* :class:`FOCPMSM` – field-oriented control of the permanent-magnet
+  synchronous machine (rotor position directly available, ``i_d* = 0``).
+* :class:`FOCInduction` – indirect rotor-flux-oriented control (IRFOC) of the
+  induction machine with slip/field-angle computation.
 
-Kaskadenstruktur in beiden Fällen:
+Cascade structure in both cases:
 
-    Drehzahlregler (PI)  ->  i_q*  ->  Stromregler (PI)  ->  v_d, v_q  ->  SVPWM
+    Speed controller (PI)  ->  i_q*  ->  Current controller (PI)  ->  v_d, v_q  ->  SVPWM
 """
 
 from __future__ import annotations
@@ -39,19 +39,19 @@ __all__ = ["FOCPMSM", "FOCInduction"]
 
 @dataclass
 class FOCPMSM:
-    """Feldorientierte Regelung der permanenterregten Synchronmaschine.
+    """Field-oriented control of the permanent-magnet synchronous machine.
 
     Parameters
     ----------
     motor:
-        Die zu regelnde :class:`~frequenzumrichter.motor.PMSM`. Die
-        Maschinenparameter werden für die Entkopplungs-Vorsteuerung verwendet.
+        The :class:`~frequenzumrichter.motor.PMSM` to be controlled. The
+        machine parameters are used for the decoupling feedforward.
     speed_pi:
-        Drehzahlregler (PI). Die Stellgröße ist der Soll-q-Strom.
+        Speed controller (PI). The control output is the reference q current.
     id_pi, iq_pi:
-        Stromregler (PI) für d- und q-Achse. Stellgröße ist die dq-Spannung.
+        Current controllers (PI) for the d and q axes. The control output is the dq voltage.
     decoupling:
-        Aktiviert die Entkopplungs-Vorsteuerung der Spannungsgleichungen.
+        Enables the decoupling feedforward of the voltage equations.
     """
 
     motor: PMSM
@@ -76,14 +76,14 @@ class FOCPMSM:
         theta_e = p * meas.theta_m
         omega_e = p * meas.omega_m
 
-        # Messung ins rotorfeste dq-System transformieren
+        # Transform the measurement into the rotor (dq) reference frame
         i_d, i_q = park(meas.i_alpha, meas.i_beta, theta_e)
 
-        # Äußere Schleife: Drehzahlregler liefert Soll-q-Strom
+        # Outer loop: speed controller provides the reference q current
         i_q_ref = self.speed_pi.step(speed_ref - meas.omega_m, dt)
-        i_d_ref = 0.0  # Oberflächen-PMSM: kein Feldschwächbetrieb
+        i_d_ref = 0.0  # surface-mounted PMSM: no field-weakening operation
 
-        # Entkopplungs-Vorsteuerung
+        # Decoupling feedforward
         ff_d = -omega_e * self.motor.l_q * i_q if self.decoupling else 0.0
         ff_q = (
             omega_e * (self.motor.l_d * i_d + self.motor.flux_linkage)
@@ -91,11 +91,11 @@ class FOCPMSM:
             else 0.0
         )
 
-        # Innere Schleife: Stromregler
+        # Inner loop: current controllers
         v_d = self.id_pi.step(i_d_ref - i_d, dt, feedforward=ff_d)
         v_q = self.iq_pi.step(i_q_ref - i_q, dt, feedforward=ff_q)
 
-        # Spannungsbegrenzung auf den Aussteuerkreis
+        # Voltage limit to the voltage limit circle
         v_max = MAX_LINEAR_SVPWM * v_dc
         v_d, v_q = limit_vector(v_d, v_q, v_max)
 
@@ -115,28 +115,28 @@ class FOCPMSM:
 
 @dataclass
 class FOCInduction:
-    """Indirekte rotorflussorientierte Regelung (IRFOC) der Asynchronmaschine.
+    """Indirect rotor-flux-oriented control (IRFOC) of the induction machine.
 
-    Der Feldwinkel wird nicht gemessen, sondern aus der Schlupfbeziehung
-    berechnet (daher *indirekt*):
+    The field angle is not measured but computed from the slip relationship
+    (hence *indirect*):
 
     .. math::
 
         \\omega_{sl} = \\frac{i_q^{*}}{\\tau_r \\, i_d^{*}}, \\qquad
-        \\theta_{feld} = \\int (p\\,\\omega_m + \\omega_{sl})\\, dt
+        \\theta_{field} = \\int (p\\,\\omega_m + \\omega_{sl})\\, dt
 
-    Der d-Strom-Sollwert stellt den Rotorfluss ein
-    (``i_d* = ψ_r,soll / L_m``), der q-Strom-Sollwert kommt aus dem
-    Drehzahlregler.
+    The d-current setpoint sets the rotor flux
+    (``i_d* = ψ_r,ref / L_m``), the q-current setpoint comes from the
+    speed controller.
 
     Parameters
     ----------
     motor:
-        Die zu regelnde :class:`~frequenzumrichter.motor.InductionMotor`.
+        The :class:`~frequenzumrichter.motor.InductionMotor` to be controlled.
     speed_pi, id_pi, iq_pi:
-        PI-Regler für Drehzahl- bzw. Stromregelung.
+        PI controllers for speed and current control, respectively.
     flux_ref:
-        Soll-Rotorfluss [Wb]. Bestimmt zusammen mit ``L_m`` den d-Strom.
+        Reference rotor flux [Wb]. Together with ``L_m`` it determines the d current.
     """
 
     motor: InductionMotor
@@ -164,25 +164,25 @@ class FOCInduction:
         tau_r = self.motor.tau_r
         l_m = self.motor.l_m
 
-        # Soll-d-Strom aus dem gewünschten Rotorfluss
+        # Reference d current from the desired rotor flux
         i_d_ref = self.flux_ref / l_m
-        # Soll-q-Strom aus dem Drehzahlregler
+        # Reference q current from the speed controller
         i_q_ref = self.speed_pi.step(speed_ref - meas.omega_m, dt)
 
-        # Schlupfkreisfrequenz und Feldwinkel (indirekte Orientierung)
+        # Slip angular frequency and field angle (indirect orientation)
         omega_sl = i_q_ref / (tau_r * i_d_ref) if abs(i_d_ref) > 1e-9 else 0.0
         omega_e = p * meas.omega_m + omega_sl
         self.theta_field += omega_e * dt
         self.theta_field = float(np.mod(self.theta_field, 2.0 * np.pi))
 
-        # Messung ins feldorientierte dq-System transformieren
+        # Transform the measurement into the field-oriented dq frame
         i_d, i_q = park(meas.i_alpha, meas.i_beta, self.theta_field)
 
-        # Stromregler
+        # Current controllers
         v_d = self.id_pi.step(i_d_ref - i_d, dt)
         v_q = self.iq_pi.step(i_q_ref - i_q, dt)
 
-        # Spannungsbegrenzung auf den Aussteuerkreis
+        # Voltage limit to the voltage limit circle
         v_max = MAX_LINEAR_SVPWM * v_dc
         v_d, v_q = limit_vector(v_d, v_q, v_max)
 

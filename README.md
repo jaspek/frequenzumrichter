@@ -4,36 +4,35 @@
 ![Python](https://img.shields.io/badge/python-3.9%2B-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
-Eine vollständige, gut dokumentierte **Simulation eines Frequenzumrichters** (engl.
-*variable-frequency drive*, VFD) in reinem Python/NumPy. Das Paket modelliert den
-gesamten Antriebsstrang – vom speisenden Netz über den Leistungsteil bis zur
-geregelten Drehfeldmaschine – und eignet sich für Lehre, Reglerentwurf und
-Vorab-Simulationen.
+A complete, well-documented **simulation of a variable-frequency drive** (VFD) in
+pure Python/NumPy. The package models the entire drivetrain – from the supplying
+grid through the power stage to the controlled rotating-field machine – and is
+suitable for teaching, controller design and pre-simulation studies.
 
-> **Was ist ein Frequenzumrichter?** Ein Frequenzumrichter erzeugt aus einem Netz
-> mit fester Frequenz ein Drehspannungssystem **variabler Frequenz und Amplitude**
-> und steuert damit Drehzahl und Drehmoment eines Drehstrommotors stufenlos. Er ist
-> das Herzstück nahezu jedes modernen elektrischen Antriebs – von der Pumpe über das
-> Förderband bis zum Elektrofahrzeug.
+> **What is a variable-frequency drive?** A variable-frequency drive generates,
+> from a grid with fixed frequency, a three-phase voltage system of **variable
+> frequency and amplitude**, and thereby controls the speed and torque of a
+> three-phase motor continuously. It is the heart of nearly every modern electrical
+> drive – from pumps and conveyor belts to electric vehicles.
 
 ---
 
-## Inhalt / Features
+## Contents / Features
 
-| Baustein | Modul | Beschreibung |
+| Component | Module | Description |
 |----------|-------|--------------|
-| **Gleichrichter** | `power_stage.Rectifier` | Ungesteuerte B6-Diodenbrücke (`V_dc ≈ 1.35·V_LL`) |
-| **Zwischenkreis** | `power_stage.DCLink` | Kondensatormodell, steif oder dynamisch (Rückspeise-Überspannung) |
-| **Wechselrichter** | `power_stage.Inverter` | 2-Level-Spannungswechselrichter (Mittelwertmodell) mit SVPWM |
-| **PWM** | `pwm` | Sinus-PWM und Raumzeigermodulation (SVPWM via Min/Max-Injektion) |
-| **Asynchronmaschine** | `motor.InductionMotor` | Käfigläufer im stationären αβ-Modell |
-| **Synchronmaschine** | `motor.PMSM` | Permanenterregte PMSM im rotorfesten dq-Modell |
-| **U/f-Steuerung** | `vf_control.VFControl` | Skalare Kennliniensteuerung mit Spannungsanhebung |
-| **Feldorientierte Regelung** | `foc.FOCPMSM`, `foc.FOCInduction` | Vektorregelung (PMSM & indirekte IRFOC der ASM) |
-| **Regler** | `controllers` | PI-Regler mit Anti-Windup, Rampe, PT1-Filter |
-| **Schutz** | `protection.Protection` | Über-/Unterspannung, Überstrom, Überdrehzahl, I²t-Thermomodell |
-| **Transformationen** | `transforms` | Clarke / Park (amplituden-invariant) |
-| **Simulation** | `simulation`, `drive.Frequenzumrichter` | RK4-Integrator, geschlossener Regelkreis, Datenaufzeichnung |
+| **Rectifier** | `power_stage.Rectifier` | Uncontrolled B6 diode bridge (`V_dc ≈ 1.35·V_LL`) |
+| **DC link** | `power_stage.DCLink` | Capacitor model, stiff or dynamic (regenerative overvoltage) |
+| **Inverter** | `power_stage.Inverter` | 2-level voltage-source inverter (averaged model) with SVPWM |
+| **PWM** | `pwm` | Sine PWM and space-vector modulation (SVPWM via min/max injection) |
+| **Induction machine** | `motor.InductionMotor` | Squirrel-cage rotor in the stationary αβ model |
+| **Synchronous machine** | `motor.PMSM` | Permanent-magnet PMSM in the rotor (dq) model |
+| **V/f control** | `vf_control.VFControl` | Scalar characteristic-curve control with voltage boost |
+| **Field-oriented control** | `foc.FOCPMSM`, `foc.FOCInduction` | Vector control (PMSM & indirect IRFOC of the induction machine) |
+| **Controllers** | `controllers` | PI controllers with anti-windup, ramp, PT1 filter |
+| **Protection** | `protection.Protection` | Over-/undervoltage, overcurrent, overspeed, I²t thermal model |
+| **Transformations** | `transforms` | Clarke / Park (amplitude-invariant) |
+| **Simulation** | `simulation`, `drive.Frequenzumrichter` | RK4 integrator, closed control loop, data logging |
 
 ---
 
@@ -42,44 +41,43 @@ Vorab-Simulationen.
 ```bash
 git clone https://github.com/jaspek/frequenzumrichter.git
 cd frequenzumrichter
-pip install -e .            # Kernpaket (nur NumPy)
-pip install -e ".[dev]"     # zusätzlich pytest + matplotlib (Tests & Plots)
+pip install -e .            # core package (NumPy only)
+pip install -e ".[dev]"     # additionally pytest + matplotlib (tests & plots)
 ```
 
-Benötigt Python ≥ 3.9 und NumPy. Für die Beispiel-Plots wird Matplotlib verwendet.
+Requires Python ≥ 3.9 and NumPy. Matplotlib is used for the example plots.
 
 ---
 
-## Schnellstart
+## Quick start
 
 ```python
 from frequenzumrichter import build_foc_pmsm_drive
 
-# Vorkonfigurierter Servoantrieb (PMSM + feldorientierte Regelung)
+# Pre-configured servo drive (PMSM + field-oriented control)
 fu = build_foc_pmsm_drive()
 
-# Drehzahlsprung auf 100 rad/s mit 0.5 Nm Last, 0.5 s simulieren
+# Speed step to 100 rad/s with 0.5 Nm load, simulate for 0.5 s
 result = fu.run(t_end=0.5, speed_ref=100.0, load_torque=0.5)
 
-print("Enddrehzahl :", round(float(result.speed[-1]), 2), "rad/s")
-print("Ausregelzeit:", round(result.settling_time(), 4), "s")
+print("Final speed  :", round(float(result.speed[-1]), 2), "rad/s")
+print("Settling time:", round(result.settling_time(), 4), "s")
 ```
 
 ```
-Enddrehzahl : 100.0 rad/s
-Ausregelzeit: 0.0278 s
+Final speed  : 100.0 rad/s
+Settling time: 0.0278 s
 ```
 
-### Zeit- und drehzahlabhängige Vorgaben
+### Time- and speed-dependent references
 
-Sowohl Drehzahlsollwert als auch Lastmoment dürfen Konstanten **oder** Funktionen
-sein:
+Both the speed setpoint and the load torque may be constants **or** functions:
 
 ```python
-# Reversierung über einen Sollwertsprung
+# Speed reversal via a setpoint step
 speed_ref = lambda t: 80.0 if t < 0.25 else -80.0
 
-# Passive Lüfterlast ∝ ω² (verschwindet bei Stillstand): f(t, meas)
+# Passive fan load ∝ ω² (vanishes at standstill): f(t, meas)
 fan = lambda t, meas: 1e-4 * meas.omega_m * abs(meas.omega_m)
 
 result = fu.run(t_end=0.5, speed_ref=speed_ref, load_torque=fan)
@@ -87,92 +85,91 @@ result = fu.run(t_end=0.5, speed_ref=speed_ref, load_torque=fan)
 
 ---
 
-## Beispiele
+## Examples
 
-Im Ordner [`examples/`](examples/) liegen lauffähige Skripte, die jeweils einen
-Plot nach `examples/output/` schreiben:
+The [`examples/`](examples/) folder contains runnable scripts, each of which writes
+a plot to `examples/output/`:
 
 ```bash
-python examples/run_all.py          # alle Beispiele auf einmal
-python examples/01_vf_anlauf.py     # einzeln
+python examples/run_all.py          # all examples at once
+python examples/01_vf_anlauf.py     # individually
 ```
 
-| Skript | Inhalt |
+| Script | Contents |
 |--------|--------|
-| `01_vf_anlauf.py` | Sanftanlauf einer ASM mit U/f-Steuerung |
-| `02_foc_pmsm_drehzahlsprung.py` | Hochdynamische PMSM-Regelung, Sprünge & Reversierung |
-| `03_svpwm_demo.py` | SVPWM-Tastverhältnisse und erweiterter Aussteuerbereich |
-| `04_lastsprung_und_schutz.py` | Störgrößenverhalten + thermische Abschaltung |
-| `05_transformationen.py` | Clarke-/Park-Transformation anschaulich |
+| `01_vf_anlauf.py` | Soft start of an induction machine with V/f control |
+| `02_foc_pmsm_drehzahlsprung.py` | Highly dynamic PMSM control, steps & reversal |
+| `03_svpwm_demo.py` | SVPWM duty cycles and extended modulation range |
+| `04_lastsprung_und_schutz.py` | Disturbance rejection + thermal trip |
+| `05_transformationen.py` | Clarke / Park transformation illustrated |
 
 ---
 
-## Architektur
+## Architecture
 
 ```
-            Netz (3~)
+            Grid (3~)
                │
         ┌──────▼──────┐
-        │ Gleichrichter│  Rectifier      AC ➜ DC
+        │  Rectifier  │  AC ➜ DC
         └──────┬──────┘
         ┌──────▼──────┐
-        │ Zwischenkreis│  DCLink         Glättung / Energiepuffer
+        │   DC link   │  smoothing / energy buffer
         └──────┬──────┘
         ┌──────▼──────┐
-        │Wechselrichter│  Inverter+SVPWM DC ➜ AC (variabel)
+        │  Inverter   │  SVPWM,  DC ➜ AC (variable)
         └──────┬──────┘
                │  v_alpha, v_beta
         ┌──────▼──────┐        ┌─────────────┐
-        │    Motor    │◄───────│   Regelung   │  U/f  oder  FOC
-        │ ASM / PMSM  │ Messung│  (PI-Kaskade)│
+        │    Motor    │◄───────│   Control   │  U/f  or  FOC
+        │  IM / PMSM  │ measure│ (PI cascade)│
         └─────────────┘───────►└─────────────┘
                   ▲
             ┌─────┴─────┐
-            │   Schutz   │  Protection (Trip)
+            │ Protection│  (trip)
             └───────────┘
 ```
 
-Die Klasse `Frequenzumrichter` (`drive.py`) verbindet alle Komponenten zu einem
-geschlossenen Regelkreis und integriert das Motormodell mit einem
-Runge-Kutta-Verfahren 4. Ordnung (Zero-Order-Hold der Stellspannung über die
-Abtastperiode).
+The `Frequenzumrichter` class (`drive.py`) connects all components into a closed
+control loop and integrates the motor model with a 4th-order Runge-Kutta method
+(zero-order hold of the control voltage over the sampling period).
 
-Eine ausführliche Beschreibung findet sich in [`docs/`](docs/):
+A detailed description can be found in [`docs/`](docs/):
 
-* [`docs/theorie.md`](docs/theorie.md) – Funktionsprinzip des Frequenzumrichters
-* [`docs/regelung.md`](docs/regelung.md) – U/f-Steuerung und feldorientierte Regelung
-* [`docs/architektur.md`](docs/architektur.md) – Aufbau des Codes & Erweiterung
+* [`docs/theorie.md`](docs/theorie.md) – operating principle of the variable-frequency drive
+* [`docs/regelung.md`](docs/regelung.md) – V/f control and field-oriented control
+* [`docs/architektur.md`](docs/architektur.md) – code structure & extension
 
 ---
 
 ## Tests
 
 ```bash
-pytest                      # 76 Tests (Einheit + Integration)
+pytest                      # 76 tests (unit + integration)
 ```
 
-Die Testsuite deckt Transformationen, PWM, Regler, Motormodelle, Leistungsteil,
-Schutzfunktionen sowie den geschlossenen Regelkreis (Sollwertfolge,
-Störgrößenverhalten, Reversierung, Schutzauslösung) ab.
+The test suite covers transformations, PWM, controllers, motor models, the power
+stage, protection functions, as well as the closed control loop (setpoint tracking,
+disturbance rejection, reversal, protection trip).
 
 ---
 
-## Modellannahmen & Grenzen
+## Model assumptions & limitations
 
-* **Mittelwertmodell** des Wechselrichters – die Schaltvorgänge (PWM-Oberschwingungen,
-  Totzeit) werden über die Abtastperiode gemittelt. Für Stromregler- und
-  Drehzahlbetrachtungen ist das adäquat; für EMV-/Schaltverlust-Analysen wäre ein
-  schaltendes Modell nötig.
-* **Lineare Magnetik** – Sättigung und Eisenverluste sind nicht modelliert.
-* **Ideale Messung** – Strom-/Lagegeber ohne Rauschen und Verzögerung.
+* **Averaged model** of the inverter – the switching events (PWM harmonics,
+  dead time) are averaged over the sampling period. This is adequate for
+  current-controller and speed considerations; for EMC / switching-loss analyses a
+  switched model would be required.
+* **Linear magnetics** – saturation and iron losses are not modeled.
+* **Ideal measurement** – current/position sensors without noise or delay.
 
-Diese Vereinfachungen sind bewusst gewählt, um Funktionsprinzip und Regelung klar
-und numerisch robust abzubilden. Die Modulstruktur erlaubt es, einzelne Bausteine
-(z.B. ein schaltendes Wechselrichtermodell oder eine Sättigungskennlinie) gezielt
-zu verfeinern.
+These simplifications are deliberately chosen in order to depict the operating
+principle and control clearly and with numerical robustness. The modular structure
+makes it possible to selectively refine individual building blocks (e.g. a switched
+inverter model or a saturation characteristic).
 
 ---
 
-## Lizenz
+## License
 
-MIT – siehe [`LICENSE`](LICENSE).
+MIT – see [`LICENSE`](LICENSE).

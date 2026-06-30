@@ -1,14 +1,14 @@
-"""Schutzfunktionen des Frequenzumrichters.
+"""Protection functions of the variable-frequency drive.
 
-Ein realer Frequenzumrichter überwacht kontinuierlich kritische Größen und
-schaltet bei Grenzwertverletzung ab (*Trip*), um Gerät und Maschine zu schützen.
-Dieses Modul bildet die wichtigsten Schutzfunktionen nach:
+A real VFD continuously monitors critical quantities and trips when a limit is
+violated (*trip*) in order to protect the device and the machine.
+This module reproduces the most important protection functions:
 
-* **Überstrom** (Kurzschluss-/Überlastschutz)
-* **Überspannung** im Zwischenkreis (z.B. bei generatorischem Bremsen)
-* **Unterspannung** im Zwischenkreis (Netzausfall)
-* **Überdrehzahl**
-* **Thermische Überlast** des Motors über ein ``I²t``-Modell
+* **Overcurrent** (short-circuit / overload protection)
+* **Overvoltage** in the DC link (e.g. during regenerative braking)
+* **Undervoltage** in the DC link (mains failure)
+* **Overspeed**
+* **Thermal overload** of the motor via an ``I²t`` model
 """
 
 from __future__ import annotations
@@ -20,35 +20,35 @@ __all__ = ["FaultType", "ProtectionLimits", "Protection"]
 
 
 class FaultType(enum.Enum):
-    """Mögliche Fehlerursachen, die zu einer Abschaltung führen."""
+    """Possible fault causes that lead to a trip."""
 
-    OVERCURRENT = "Überstrom"
-    OVERVOLTAGE = "Überspannung Zwischenkreis"
-    UNDERVOLTAGE = "Unterspannung Zwischenkreis"
-    OVERSPEED = "Überdrehzahl"
-    THERMAL_OVERLOAD = "Thermische Überlast (I²t)"
+    OVERCURRENT = "Overcurrent"
+    OVERVOLTAGE = "DC-link overvoltage"
+    UNDERVOLTAGE = "DC-link undervoltage"
+    OVERSPEED = "Overspeed"
+    THERMAL_OVERLOAD = "Thermal overload (I²t)"
 
 
 @dataclass
 class ProtectionLimits:
-    """Grenzwerte für die Schutzfunktionen.
+    """Limit values for the protection functions.
 
     Parameters
     ----------
     max_current:
-        Spitzenstrom-Grenze (Betrag des Stromraumzeigers) [A].
+        Peak-current limit (magnitude of the current space vector) [A].
     max_dc_voltage, min_dc_voltage:
-        Zulässiger Bereich der Zwischenkreisspannung [V].
+        Permissible range of the DC-link voltage [V].
     max_speed:
-        Betragsgrenze der mechanischen Drehzahl [rad/s].
+        Magnitude limit of the mechanical speed [rad/s].
     thermal_current:
-        Dauerstrom (Nennstrom), oberhalb dessen sich das thermische Modell
-        auflädt [A].
+        Continuous current (rated current), above which the thermal model
+        charges up [A].
     thermal_time_constant:
-        Thermische Zeitkonstante des ``I²t``-Modells [s].
+        Thermal time constant of the ``I²t`` model [s].
     thermal_trip_level:
-        Schwellwert der (normierten) thermischen Belastung, bei dem abgeschaltet
-        wird. ``1.0`` entspricht 100 % zulässiger Erwärmung.
+        Threshold of the (normalized) thermal load at which the drive trips.
+        ``1.0`` corresponds to 100 % of the permissible heating.
     """
 
     max_current: float = 50.0
@@ -62,28 +62,28 @@ class ProtectionLimits:
 
 @dataclass
 class Protection:
-    """Überwacht Messgrößen und löst bei Grenzwertverletzung einen Trip aus.
+    """Monitors measured quantities and triggers a trip when a limit is violated.
 
-    Solange :attr:`tripped` ``False`` ist, arbeitet der Umrichter normal. Nach
-    einem Trip bleibt der Zustand erhalten, bis :meth:`reset` aufgerufen wird –
-    so wie ein realer Umrichter erst nach Quittierung wieder anläuft.
+    As long as :attr:`tripped` is ``False``, the drive operates normally. After
+    a trip the state is retained until :meth:`reset` is called – just as a real
+    drive only restarts after acknowledgement.
     """
 
     limits: ProtectionLimits = field(default_factory=ProtectionLimits)
     tripped: bool = False
     faults: list[FaultType] = field(default_factory=list)
-    thermal_state: float = 0.0  # normierte Erwärmung (I²t)
+    thermal_state: float = 0.0  # normalized heating (I²t)
 
     def reset(self) -> None:
-        """Quittiert alle Fehler und gibt den Umrichter wieder frei."""
+        """Acknowledges all faults and re-enables the drive."""
         self.tripped = False
         self.faults = []
         self.thermal_state = 0.0
 
     def _update_thermal(self, current_magnitude: float, dt: float) -> None:
-        """Aktualisiert das I²t-Erwärmungsmodell (PT1-artig)."""
+        """Updates the I²t heating model (PT1-like)."""
         lim = self.limits
-        # treibende Größe: (I/I_nenn)² - 1; oberhalb Nennstrom -> Erwärmung
+        # driving quantity: (I/I_rated)² - 1; above rated current -> heating
         drive = (current_magnitude / lim.thermal_current) ** 2 - 1.0
         self.thermal_state += drive * dt / lim.thermal_time_constant
         if self.thermal_state < 0.0:
@@ -96,23 +96,23 @@ class Protection:
         speed: float,
         dt: float,
     ) -> bool:
-        """Prüft alle Schutzgrenzen für einen Zeitschritt.
+        """Checks all protection limits for one time step.
 
         Parameters
         ----------
         current_magnitude:
-            Betrag des Statorstromraumzeigers [A].
+            Magnitude of the stator current space vector [A].
         dc_voltage:
-            Zwischenkreisspannung [V].
+            DC-link voltage [V].
         speed:
-            Mechanische Drehzahl [rad/s].
+            Mechanical speed [rad/s].
         dt:
-            Zeitschritt [s] (für das thermische Modell).
+            Time step [s] (for the thermal model).
 
         Returns
         -------
         bool
-            ``True``, wenn der Umrichter (weiterhin) abgeschaltet ist.
+            ``True`` if the drive is (still) tripped.
         """
         lim = self.limits
         self._update_thermal(current_magnitude, dt)
@@ -131,7 +131,7 @@ class Protection:
 
         if faults:
             self.tripped = True
-            # neue Fehler ergänzen, Reihenfolge/Eindeutigkeit wahren
+            # add new faults, preserving order and uniqueness
             for f in faults:
                 if f not in self.faults:
                     self.faults.append(f)

@@ -1,15 +1,15 @@
-"""frequenzumrichter – Simulation eines Frequenzumrichters (VFD) in Python.
+"""frequenzumrichter – Simulation of a variable-frequency drive (VFD) in Python.
 
-Dieses Paket modelliert einen vollständigen Drehstrom-Antrieb mit
-Spannungszwischenkreis-Umrichter:
+This package models a complete three-phase drive with a
+voltage-source DC-link converter:
 
-* **Leistungsteil** – Gleichrichter, Zwischenkreis, Wechselrichter (SVPWM)
-* **Maschinen** – Asynchron- und permanenterregte Synchronmaschine
-* **Regelung** – skalare U/f-Steuerung und feldorientierte Regelung (FOC)
-* **Schutz** – Über-/Unterspannung, Überstrom, Überdrehzahl, I²t-Thermomodell
+* **Power stage** – rectifier, DC link, inverter (SVPWM)
+* **Machines** – induction and permanent-magnet synchronous machine
+* **Control** – scalar V/f control and field-oriented control (FOC)
+* **Protection** – over-/undervoltage, overcurrent, overspeed, I²t thermal model
 
-Schneller Einstieg
-------------------
+Quick start
+-----------
 >>> from frequenzumrichter import build_foc_pmsm_drive
 >>> fu = build_foc_pmsm_drive()
 >>> result = fu.run(t_end=0.5, speed_ref=100.0, load_torque=0.5)
@@ -53,21 +53,21 @@ __version__ = "0.1.0"
 
 __all__ = [
     "__version__",
-    # Antrieb
+    # Drive
     "Frequenzumrichter",
     "build_vf_drive",
     "build_foc_pmsm_drive",
     "build_foc_induction_drive",
-    # Maschinen
+    # Machines
     "InductionMotor",
     "PMSM",
     "MotorMeasurements",
-    # Leistungsteil
+    # Power stage
     "Rectifier",
     "DCLink",
     "Inverter",
     "InverterOutput",
-    # Regelung
+    # Control
     "VFControl",
     "FOCPMSM",
     "FOCInduction",
@@ -76,11 +76,11 @@ __all__ = [
     "LowPassFilter",
     "ControlOutput",
     "limit_vector",
-    # Schutz
+    # Protection
     "Protection",
     "ProtectionLimits",
     "FaultType",
-    # Transformationen
+    # Transforms
     "clarke",
     "inverse_clarke",
     "park",

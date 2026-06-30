@@ -1,4 +1,4 @@
-"""Tests für die Regler-Bausteine (PI, Rampe, Tiefpass)."""
+"""Tests for the controller building blocks (PI, ramp, low-pass)."""
 
 import pytest
 
@@ -6,14 +6,14 @@ from frequenzumrichter.controllers import LowPassFilter, PIController, RateLimit
 
 
 def test_pi_drives_error_to_zero():
-    """Geschlossener Regelkreis an einer Integrator-Strecke erreicht den Sollwert."""
+    """Closed control loop on an integrator plant reaches the setpoint."""
     pi = PIController(kp=2.0, ki=10.0)
     plant = 0.0
     target = 5.0
     dt = 1e-3
     for _ in range(20000):
         u = pi.step(target - plant, dt)
-        plant += u * dt  # Integrator-Strecke
+        plant += u * dt  # integrator plant
     assert plant == pytest.approx(target, abs=1e-2)
 
 
@@ -24,19 +24,19 @@ def test_pi_output_clamped():
 
 
 def test_pi_anti_windup_limits_integral_and_speeds_recovery():
-    """Anti-Windup hält den Integralspeicher klein und beschleunigt die Erholung."""
+    """Anti-windup keeps the integral term small and speeds up recovery."""
     aw = PIController(
         kp=1.0, ki=50.0, output_min=-1.0, output_max=1.0, anti_windup_gain=20.0
     )
     no_aw = PIController(kp=1.0, ki=50.0, output_min=-1.0, output_max=1.0)
 
-    # 1 s dauerhaft in Sättigung treiben
+    # drive permanently into saturation for 1 s
     for _ in range(1000):
         aw.step(5.0, 1e-3)
         no_aw.step(5.0, 1e-3)
     assert abs(aw.integral) < abs(no_aw.integral)
 
-    # Vorzeichen umkehren: zählen, wie viele Schritte bis zum Verlassen der Sättigung
+    # reverse the sign: count how many steps until leaving saturation
     def steps_to_leave_saturation(pi: PIController) -> int:
         n = 0
         while pi.step(-5.0, 1e-3) >= 1.0 and n < 100000:
@@ -47,7 +47,7 @@ def test_pi_anti_windup_limits_integral_and_speeds_recovery():
 
 
 def test_pi_without_anti_windup_winds_up():
-    """Ohne Anti-Windup wächst der Integrator in der Sättigung deutlich stärker."""
+    """Without anti-windup the integrator grows much more strongly in saturation."""
     with_aw = PIController(
         kp=1.0, ki=50.0, output_min=-1.0, output_max=1.0, anti_windup_gain=50.0
     )
@@ -63,14 +63,14 @@ def test_rate_limiter_ramps():
     value = 0.0
     for _ in range(100):
         value = rl.step(100.0, 0.01)
-    # nach 1 s mit 10/s darf der Wert höchstens 10 erreicht haben
+    # after 1 s at 10/s the value may have reached at most 10
     assert value == pytest.approx(10.0, abs=1e-6)
 
 
 def test_rate_limiter_asymmetric():
     rl = RateLimiter(rate_up=10.0, rate_down=5.0, value=20.0)
-    v = rl.step(0.0, 1.0)  # ein 1-s-Schritt nach unten
-    assert v == pytest.approx(15.0)  # nur 5/s Abfall
+    v = rl.step(0.0, 1.0)  # one 1-s step downward
+    assert v == pytest.approx(15.0)  # only 5/s decrease
 
 
 def test_low_pass_filter_steady_state():

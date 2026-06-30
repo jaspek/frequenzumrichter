@@ -7,19 +7,19 @@ build/
 dist/
 .eggs/
 
-# Virtuelle Umgebungen
+# Virtual environments
 .venv/
 venv/
 env/
 
-# Test- / Tooling-Caches
+# Test / tooling caches
 .pytest_cache/
 .ruff_cache/
 .mypy_cache/
 .coverage
 htmlcov/
 
-# Beispiel-Ausgaben (Plots)
+# Example outputs (plots)
 examples/output/
 
 # Editor / OS

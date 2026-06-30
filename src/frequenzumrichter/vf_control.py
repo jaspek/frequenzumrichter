@@ -1,21 +1,21 @@
-"""Skalare U/f-Steuerung (Spannungs-Frequenz-Kennliniensteuerung).
+"""Scalar V/f control (voltage-frequency characteristic control).
 
-Die U/f-Steuerung ist das einfachste und robusteste Verfahren zum Betrieb einer
-Asynchronmaschine am Frequenzumrichter. Die Statorspannung wird proportional zur
-Statorfrequenz geführt, sodass der magnetische Fluss näherungsweise konstant
-bleibt:
+V/f control is the simplest and most robust method for operating an induction
+machine on a variable-frequency drive. The stator voltage is varied
+proportionally to the stator frequency, so that the magnetic flux remains
+approximately constant:
 
 .. math::
 
-    U(f) = U_{boost} + \\frac{U_{nenn}}{f_{nenn}} \\cdot f
+    U(f) = U_{boost} + \\frac{U_{rated}}{f_{rated}} \\cdot f
 
-Bei kleinen Frequenzen sorgt die *Boost*-Spannung ``U_boost`` dafür, dass der
-ohmsche Spannungsabfall am Statorwiderstand kompensiert wird und ein
-ausreichendes Anlaufmoment zur Verfügung steht.
+At low frequencies, the *boost* voltage ``U_boost`` ensures that the ohmic
+voltage drop across the stator resistance is compensated and that sufficient
+starting torque is available.
 
-Die U/f-Steuerung arbeitet **gesteuert** (open loop): Es ist keine Rückführung
-von Strom oder Drehzahl erforderlich. Die tatsächliche Drehzahl liegt um den
-lastabhängigen Schlupf unter der Synchrondrehzahl.
+V/f control operates **open loop**: no feedback of current or speed is
+required. The actual speed lies below the synchronous speed by the
+load-dependent slip.
 """
 
 from __future__ import annotations
@@ -33,20 +33,20 @@ __all__ = ["VFControl"]
 
 @dataclass
 class VFControl:
-    """Skalare U/f-Kennliniensteuerung.
+    """Scalar V/f characteristic control.
 
     Parameters
     ----------
     f_rated:
-        Nennfrequenz [Hz] (z.B. 50 Hz).
+        Rated frequency [Hz] (e.g. 50 Hz).
     v_rated:
-        Strangspannungs-Amplitude bei Nennfrequenz [V].
+        Phase-voltage amplitude at rated frequency [V].
     pole_pairs:
-        Polpaarzahl der Maschine.
+        Number of pole pairs of the machine.
     v_boost:
-        Spannungsanhebung bei f = 0 [V].
+        Voltage boost at f = 0 [V].
     freq_ramp:
-        Maximale Frequenzänderung [Hz/s] (Sanftanlauf-Rampe).
+        Maximum frequency change [Hz/s] (soft-start ramp).
     """
 
     f_rated: float = 50.0
@@ -66,10 +66,10 @@ class VFControl:
         self._ramp.reset(0.0)
 
     def voltage_for_frequency(self, f_e: float) -> float:
-        """U/f-Kennlinie: Strangspannungsamplitude für die Frequenz ``f_e`` [Hz]."""
+        """V/f characteristic: phase-voltage amplitude for the frequency ``f_e`` [Hz]."""
         slope = self.v_rated / self.f_rated
         v = self.v_boost + slope * abs(f_e)
-        # oberhalb der Nennfrequenz Spannung begrenzen (Feldschwächung)
+        # limit the voltage above the rated frequency (field weakening)
         return float(min(v, self.v_rated))
 
     def compute(
@@ -79,18 +79,18 @@ class VFControl:
         v_dc: float,
         dt: float,
     ) -> ControlOutput:
-        """Berechnet den Soll-Spannungsraumzeiger.
+        """Computes the reference voltage space vector.
 
-        ``speed_ref`` ist die gewünschte **mechanische** Winkelgeschwindigkeit
-        [rad/s]. Daraus folgt die elektrische Sollfrequenz ``f_e``.
+        ``speed_ref`` is the desired **mechanical** angular velocity
+        [rad/s]. From this follows the electrical reference frequency ``f_e``.
         """
-        # mechanische Solldrehzahl -> elektrische Sollfrequenz [Hz]
+        # mechanical reference speed -> electrical reference frequency [Hz]
         f_e_target = self.pole_pairs * speed_ref / (2.0 * np.pi)
         f_e = self._ramp.step(f_e_target, dt)
 
         omega_e = 2.0 * np.pi * f_e
         self.theta_e += omega_e * dt
-        # Winkel im Bereich [0, 2π) halten
+        # keep the angle within the range [0, 2π)
         self.theta_e = float(np.mod(self.theta_e, 2.0 * np.pi))
 
         v_mag = self.voltage_for_frequency(f_e)

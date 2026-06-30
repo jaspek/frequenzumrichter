@@ -1,14 +1,14 @@
-"""Leistungsteil des Frequenzumrichters: Gleichrichter, Zwischenkreis, Wechselrichter.
+"""Power stage of the variable-frequency drive: rectifier, DC link, inverter.
 
-Der klassische Spannungszwischenkreis-Umrichter (U-Umrichter) besteht aus drei
-Stufen:
+The classic voltage-source DC-link converter (voltage-link converter) consists
+of three stages:
 
-1. **Gleichrichter** (:class:`Rectifier`) – wandelt das speisende Drehstromnetz
-   in eine Gleichspannung. Hier als ungesteuerte 6-Puls-Diodenbrücke modelliert.
-2. **Zwischenkreis** (:class:`DCLink`) – glättet die Gleichspannung über einen
-   Kondensator und puffert Energie.
-3. **Wechselrichter** (:class:`Inverter`) – erzeugt aus der Gleichspannung über
-   PWM ein Drehspannungssystem variabler Frequenz und Amplitude.
+1. **Rectifier** (:class:`Rectifier`) – converts the feeding three-phase grid
+   into a DC voltage. Modeled here as an uncontrolled 6-pulse diode bridge.
+2. **DC link** (:class:`DCLink`) – smooths the DC voltage via a capacitor and
+   buffers energy.
+3. **Inverter** (:class:`Inverter`) – generates a three-phase voltage system of
+   variable frequency and amplitude from the DC voltage via PWM.
 """
 
 from __future__ import annotations
@@ -25,10 +25,10 @@ __all__ = ["Rectifier", "DCLink", "Inverter", "InverterOutput"]
 
 @dataclass
 class Rectifier:
-    """Ungesteuerte 6-Puls-Diodenbrücke (B6).
+    """Uncontrolled 6-pulse diode bridge (B6).
 
-    Liefert aus der verketteten Netzspannung ``v_ll_rms`` die mittlere
-    Leerlauf-Zwischenkreisspannung. Im Mittel gilt für die B6-Brücke
+    From the line-to-line grid voltage ``v_ll_rms`` it provides the average
+    no-load DC-link voltage. On average, for the B6 bridge:
 
     .. math::
 
@@ -37,7 +37,7 @@ class Rectifier:
     Parameters
     ----------
     v_ll_rms:
-        Verkettete Netz-Effektivspannung [V] (z.B. 400 V).
+        Line-to-line grid RMS voltage [V] (e.g. 400 V).
     """
 
     v_ll_rms: float = 400.0
@@ -46,45 +46,44 @@ class Rectifier:
 
     @property
     def dc_voltage(self) -> float:
-        """Mittlere Zwischenkreisspannung der Diodenbrücke [V]."""
+        """Average DC-link voltage of the diode bridge [V]."""
         return self.AVG_FACTOR * self.v_ll_rms
 
     @property
     def peak_dc_voltage(self) -> float:
-        """Spitzenwert (Leerlauf-Aufladung des Kondensators) [V]."""
+        """Peak value (no-load charging of the capacitor) [V]."""
         return np.sqrt(2.0) * self.v_ll_rms
 
 
 @dataclass
 class DCLink:
-    """Zwischenkreis-Kondensator mit Spannungsdynamik.
+    """DC-link capacitor with voltage dynamics.
 
-    Modelliert die Energiebilanz ``C · dV_dc/dt = i_quelle - i_last``. Die
-    speisende Diodenbrücke kann nur Strom **liefern**, nicht aufnehmen; sie wird
-    als Spannungsquelle mit Innenwiderstand abgebildet:
+    Models the energy balance ``C · dV_dc/dt = i_source - i_load``. The feeding
+    diode bridge can only **supply** current, not absorb it; it is represented
+    as a voltage source with internal resistance:
 
     .. math::
 
-        i_{quelle} = \\max\\!\\left(0,\\ \\frac{V_{nenn} - V_{dc}}{R_i}\\right)
+        i_{source} = \\max\\!\\left(0,\\ \\frac{V_{nom} - V_{dc}}{R_i}\\right)
 
-    Beim generatorischen Bremsen (``i_last < 0``) lädt sich der Kondensator
-    daher auf – es entsteht eine Überspannung, die ohne Bremswiderstand zur
-    Abschaltung führt. Ist ``stiff=True``, wird die Spannung als ideal konstant
-    angenommen (steifer Zwischenkreis), was für viele
-    Regelungsbetrachtungen ausreicht.
+    During regenerative braking (``i_load < 0``) the capacitor therefore charges
+    up – an overvoltage arises which, without a braking resistor, leads to a
+    trip. If ``stiff=True``, the voltage is assumed to be ideally constant
+    (stiff DC link), which is sufficient for many control considerations.
 
     Parameters
     ----------
     capacitance:
-        Kapazität ``C`` [F].
+        Capacitance ``C`` [F].
     voltage:
-        Anfangsspannung [V].
+        Initial voltage [V].
     nominal_voltage:
-        Leerlaufspannung der speisenden Brücke [V].
+        No-load voltage of the feeding bridge [V].
     source_resistance:
-        Innenwiderstand der Quelle ``R_i`` [Ω].
+        Internal resistance of the source ``R_i`` [Ω].
     stiff:
-        Wenn ``True``, bleibt die Spannung konstant.
+        If ``True``, the voltage remains constant.
     """
 
     capacitance: float = 1e-3
@@ -97,20 +96,20 @@ class DCLink:
         self.voltage = self.nominal_voltage if voltage is None else voltage
 
     def source_current(self) -> float:
-        """Vom Gleichrichter gelieferter Strom (nur positiv)."""
+        """Current supplied by the rectifier (positive only)."""
         return max(0.0, (self.nominal_voltage - self.voltage) / self.source_resistance)
 
     def update(self, i_load: float, dt: float) -> float:
-        """Aktualisiert die Zwischenkreisspannung um einen Zeitschritt.
+        """Updates the DC-link voltage by one time step.
 
-        ``i_load`` ist der vom Wechselrichter entnommene Gleichstrom (negativ bei
-        Rückspeisung / generatorischem Betrieb).
+        ``i_load`` is the DC current drawn by the inverter (negative during
+        regeneration / generator operation).
         """
         if self.stiff:
             return self.voltage
         i_source = self.source_current()
         self.voltage += (i_source - i_load) / self.capacitance * dt
-        # physikalische Untergrenze
+        # physical lower bound
         if self.voltage < 0.0:
             self.voltage = 0.0
         return self.voltage
@@ -118,31 +117,30 @@ class DCLink:
 
 @dataclass
 class InverterOutput:
-    """Ergebnis eines Wechselrichter-Schritts."""
+    """Result of one inverter step."""
 
     v_alpha: float
     v_beta: float
     v_abc: tuple[float, float, float]
     duties: tuple[float, float, float]
-    i_dc: float  # aus der Leistungsbilanz geschätzter Zwischenkreisstrom [A]
+    i_dc: float  # DC-link current estimated from the power balance [A]
 
 
 @dataclass
 class Inverter:
-    """Zweistufiger Spannungswechselrichter (Mittelwertmodell) mit SVPWM.
+    """Two-level voltage-source inverter (averaged model) with SVPWM.
 
-    Der Wechselrichter erhält einen Soll-Spannungsraumzeiger ``(v_alpha_ref,
-    v_beta_ref)`` und setzt ihn per Raumzeigermodulation in Tastverhältnisse um.
-    Aufgrund der Begrenzung der Tastverhältnisse (Übermodulation) kann der
-    tatsächlich gestellte Raumzeiger kleiner ausfallen; dieser *Ist*-Zeiger wird
-    zurückgegeben.
+    The inverter receives a reference voltage space vector ``(v_alpha_ref,
+    v_beta_ref)`` and converts it into duty cycles via space-vector modulation.
+    Because the duty cycles are limited (overmodulation), the actually applied
+    space vector may turn out smaller; this *actual* vector is returned.
 
     Parameters
     ----------
     deadtime_compensation:
-        Platzhalter-Flag; das Mittelwertmodell vernachlässigt die Verriegelungs-
-        zeit (Totzeit) der Brücke. Für detaillierte Studien kann hier eine
-        Korrektur ergänzt werden.
+        Placeholder flag; the averaged model neglects the interlock time
+        (dead time) of the bridge. For detailed studies a correction can be
+        added here.
     """
 
     deadtime_compensation: bool = False
@@ -155,24 +153,24 @@ class Inverter:
         i_alpha: float = 0.0,
         i_beta: float = 0.0,
     ) -> InverterOutput:
-        """Setzt den Soll-Spannungsraumzeiger in Brückenansteuerung um.
+        """Converts the reference voltage space vector into bridge control.
 
         Parameters
         ----------
         v_alpha_ref, v_beta_ref:
-            Soll-Spannungsraumzeiger [V].
+            Reference voltage space vector [V].
         v_dc:
-            Aktuelle Zwischenkreisspannung [V].
+            Current DC-link voltage [V].
         i_alpha, i_beta:
-            Aktueller Statorstromraumzeiger [A] – wird für die Schätzung des
-            entnommenen Zwischenkreisstroms (Leistungsbilanz) verwendet.
+            Current stator current space vector [A] – used to estimate the
+            drawn DC-link current (power balance).
         """
         duties, v_alpha_act, v_beta_act = space_vector_pwm(
             v_alpha_ref, v_beta_ref, v_dc
         )
         v_abc = inverter_voltages(*duties, v_dc)
 
-        # Leistungsbilanz: P_ac = 1.5 (vα iα + vβ iβ); i_dc = P_ac / V_dc
+        # Power balance: P_ac = 1.5 (vα iα + vβ iβ); i_dc = P_ac / V_dc
         p_ac = 1.5 * (v_alpha_act * i_alpha + v_beta_act * i_beta)
         i_dc = p_ac / v_dc if v_dc > 1e-9 else 0.0
 

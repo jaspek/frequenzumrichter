@@ -1,9 +1,9 @@
-"""Vorkonfigurierte Antriebe mit sinnvoll abgestimmten Reglern.
+"""Preconfigured drives with sensibly tuned controllers.
 
-Diese Bauhelfer (*factory functions*) liefern einsatzbereite
-:class:`~frequenzumrichter.drive.Frequenzumrichter`-Objekte, sodass man ohne
-manuelle Reglerauslegung sofort simulieren kann. Die PI-Verstärkungen sind über
-die *Betragsoptimum*-Faustformeln an die jeweilige Maschine angepasst.
+These *factory functions* return ready-to-use
+:class:`~frequenzumrichter.drive.Frequenzumrichter` objects, so that you can
+simulate right away without manual controller design. The PI gains are adapted
+to the respective machine using the *modulus optimum* rules of thumb.
 """
 
 from __future__ import annotations
@@ -28,10 +28,10 @@ def build_vf_drive(
     v_dc: float = 560.0,
     with_protection: bool = True,
 ) -> Frequenzumrichter:
-    """Asynchronmaschine mit skalarer U/f-Steuerung.
+    """Induction machine with scalar V/f control.
 
-    Robustes, gesteuertes Verfahren ohne Sensorrückführung – ideal für Lüfter-
-    und Pumpenantriebe.
+    A robust, open-loop method without sensor feedback – ideal for fan and
+    pump drives.
     """
     motor = motor or InductionMotor()
     controller = VFControl(
@@ -70,14 +70,15 @@ def build_foc_pmsm_drive(
     max_current: float = 25.0,
     with_protection: bool = True,
 ) -> Frequenzumrichter:
-    """Permanenterregte Synchronmaschine mit feldorientierter Regelung.
+    """Permanent-magnet synchronous machine with field-oriented control.
 
-    Hochdynamischer, präziser Servoantrieb. Die Stromregler sind nach dem
-    Betragsoptimum, der überlagerte Drehzahlregler weicher ausgelegt.
+    A highly dynamic, precise servo drive. The current controllers are designed
+    per the modulus optimum, while the superimposed speed controller is tuned
+    more softly.
     """
     motor = motor or PMSM()
 
-    # Stromregler (Betragsoptimum): kp = L*ω_c, ki = R*ω_c, ω_c ≈ 2π·200 Hz
+    # Current controller (modulus optimum): kp = L*ω_c, ki = R*ω_c, ω_c ≈ 2π·200 Hz
     omega_ci = 2.0 * 3.141592653589793 * 200.0
     id_pi = PIController(
         kp=motor.l_d * omega_ci,
@@ -93,7 +94,7 @@ def build_foc_pmsm_drive(
         output_max=v_dc,
         anti_windup_gain=50.0,
     )
-    # Drehzahlregler -> Soll-q-Strom (auf Maximalstrom begrenzt)
+    # Speed controller -> q-axis current reference (limited to maximum current)
     speed_pi = PIController(
         kp=0.4,
         ki=6.0,
@@ -134,7 +135,7 @@ def build_foc_induction_drive(
     max_current: float = 30.0,
     with_protection: bool = True,
 ) -> Frequenzumrichter:
-    """Asynchronmaschine mit indirekter feldorientierter Regelung (IRFOC)."""
+    """Induction machine with indirect field-oriented control (IRFOC)."""
     motor = motor or InductionMotor()
 
     omega_ci = 2.0 * 3.141592653589793 * 150.0

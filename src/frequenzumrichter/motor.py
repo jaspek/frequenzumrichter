@@ -1,26 +1,26 @@
-"""Dynamische Motormodelle für die Simulation.
+"""Dynamic motor models for the simulation.
 
-Es werden zwei Drehfeldmaschinen modelliert, die typischerweise an einem
-Frequenzumrichter betrieben werden:
+Two rotating-field machines are modeled, typically operated on a
+variable-frequency drive:
 
-* :class:`InductionMotor` – Asynchronmaschine (Käfigläufer), Modell im
-  stationären αβ-Bezugssystem mit Statorstrom und Rotorfluss als Zuständen.
-* :class:`PMSM` – permanenterregte Synchronmaschine, Modell im rotorfesten
-  dq-Bezugssystem.
+* :class:`InductionMotor` – induction machine (squirrel-cage), modeled in the
+  stationary αβ reference frame with stator current and rotor flux as states.
+* :class:`PMSM` – permanent-magnet synchronous machine, modeled in the rotor
+  (dq) reference frame.
 
-Beide Klassen bieten eine einheitliche Schnittstelle, sodass sie austauschbar
-in der Simulation verwendet werden können:
+Both classes provide a uniform interface so that they can be used
+interchangeably in the simulation:
 
-* ``n_states`` – Anzahl der Zustandsgrößen
-* ``initial_state()`` – Anfangszustandsvektor
-* ``derivatives(x, v_alpha, v_beta, load_torque)`` – Zustandsableitungen
-* ``measurements(x)`` – physikalisch messbare Größen (Ströme, Drehzahl, ...)
+* ``n_states`` – number of state variables
+* ``initial_state()`` – initial state vector
+* ``derivatives(x, v_alpha, v_beta, load_torque)`` – state derivatives
+* ``measurements(x)`` – physically measurable quantities (currents, speed, ...)
 
-Der Eingang ist stets der **stationäre** Spannungsraumzeiger ``(v_alpha,
-v_beta)``, wie ihn der Wechselrichter liefert. Maschinen, die intern im
-dq-System rechnen (PMSM), transformieren ihn selbst.
+The input is always the **stationary** voltage space vector ``(v_alpha,
+v_beta)`` as delivered by the inverter. Machines that compute internally in the
+dq frame (PMSM) transform it themselves.
 
-Alle physikalischen Größen sind in SI-Einheiten angegeben.
+All physical quantities are given in SI units.
 """
 
 from __future__ import annotations
@@ -36,39 +36,39 @@ __all__ = ["MotorMeasurements", "InductionMotor", "PMSM"]
 
 @dataclass
 class MotorMeasurements:
-    """Messbare Größen der Maschine zu einem Zeitpunkt."""
+    """Measurable quantities of the machine at a point in time."""
 
     i_alpha: float
     i_beta: float
     i_abc: tuple[float, float, float]
-    omega_m: float  # mechanische Winkelgeschwindigkeit [rad/s]
-    theta_m: float  # mechanischer Rotorwinkel [rad]
-    torque: float  # elektromagnetisches Drehmoment [Nm]
-    rotor_flux: float = 0.0  # Betrag des Rotorflusses [Wb] (nur ASM)
+    omega_m: float  # mechanical angular velocity [rad/s]
+    theta_m: float  # mechanical rotor angle [rad]
+    torque: float  # electromagnetic torque [Nm]
+    rotor_flux: float = 0.0  # magnitude of the rotor flux [Wb] (induction machine only)
 
 
 @dataclass
 class InductionMotor:
-    """Asynchronmaschine (Käfigläufer) im stationären αβ-Bezugssystem.
+    """Induction machine (squirrel-cage) in the stationary αβ reference frame.
 
-    Zustandsvektor ``x = [i_sα, i_sβ, ψ_rα, ψ_rβ, ω_m, θ_m]``.
+    State vector ``x = [i_sα, i_sβ, ψ_rα, ψ_rβ, ω_m, θ_m]``.
 
-    Das Modell basiert auf dem gekoppelten Stator-/Rotor-Gleichungssystem mit
-    der Streuziffer ``σ = 1 - L_m² / (L_s L_r)`` und der Rotorzeitkonstante
-    ``τ_r = L_r / R_r``.
+    The model is based on the coupled stator/rotor system of equations with
+    the leakage coefficient ``σ = 1 - L_m² / (L_s L_r)`` and the rotor time
+    constant ``τ_r = L_r / R_r``.
 
     Parameters
     ----------
     r_s, r_r:
-        Stator-/Rotorwiderstand [Ω].
+        Stator/rotor resistance [Ω].
     l_s, l_r, l_m:
-        Stator-, Rotor- und Hauptinduktivität [H].
+        Stator, rotor and mutual inductance [H].
     pole_pairs:
-        Polpaarzahl ``p``.
+        Number of pole pairs ``p``.
     inertia:
-        Trägheitsmoment ``J`` [kg·m²].
+        Moment of inertia ``J`` [kg·m²].
     friction:
-        Viskose Reibungskonstante ``B`` [Nm·s].
+        Viscous friction constant ``B`` [Nm·s].
     """
 
     r_s: float = 2.0
@@ -98,16 +98,16 @@ class InductionMotor:
     ) -> np.ndarray:
         i_sa, i_sb, psi_ra, psi_rb, omega_m, _theta = x
         p = self.pole_pairs
-        omega_e = p * omega_m  # elektrische Kreisfrequenz des Rotors
+        omega_e = p * omega_m  # electrical angular frequency of the rotor
 
-        # Hilfsgrößen
+        # auxiliary quantities
         k = self.l_m / (self.sigma * self.l_s * self.l_r)
         gamma = self.r_s / (self.sigma * self.l_s) + (
             self.r_r * self.l_m**2
         ) / (self.sigma * self.l_s * self.l_r**2)
         inv_sls = 1.0 / (self.sigma * self.l_s)
 
-        # Statorstrom-Dynamik
+        # stator current dynamics
         di_sa = (
             -gamma * i_sa
             + k / self.tau_r * psi_ra
@@ -121,16 +121,16 @@ class InductionMotor:
             + inv_sls * v_beta
         )
 
-        # Rotorfluss-Dynamik
+        # rotor flux dynamics
         dpsi_ra = self.l_m / self.tau_r * i_sa - psi_ra / self.tau_r - omega_e * psi_rb
         dpsi_rb = self.l_m / self.tau_r * i_sb + omega_e * psi_ra - psi_rb / self.tau_r
 
-        # elektromagnetisches Drehmoment
+        # electromagnetic torque
         torque = (
             1.5 * p * (self.l_m / self.l_r) * (psi_ra * i_sb - psi_rb * i_sa)
         )
 
-        # mechanische Bewegungsgleichung
+        # mechanical equation of motion
         domega = (torque - load_torque - self.friction * omega_m) / self.inertia
         dtheta = omega_m
 
@@ -162,27 +162,27 @@ class InductionMotor:
 
 @dataclass
 class PMSM:
-    """Permanenterregte Synchronmaschine im rotorfesten dq-Bezugssystem.
+    """Permanent-magnet synchronous machine in the rotor (dq) reference frame.
 
-    Zustandsvektor ``x = [i_d, i_q, ω_m, θ_m]``.
+    State vector ``x = [i_d, i_q, ω_m, θ_m]``.
 
-    Für eine Oberflächen-PMSM gilt ``L_d == L_q``; bei ``L_d != L_q`` wird auch
-    das Reluktanzmoment berücksichtigt.
+    For a surface-mounted PMSM ``L_d == L_q`` holds; when ``L_d != L_q`` the
+    reluctance torque is also taken into account.
 
     Parameters
     ----------
     r_s:
-        Statorwiderstand [Ω].
+        Stator resistance [Ω].
     l_d, l_q:
-        Längs-/Querinduktivität [H].
+        Direct-/quadrature-axis inductance [H].
     flux_linkage:
-        Permanentmagnet-Flussverkettung ``ψ_f`` [Wb].
+        Permanent-magnet flux linkage ``ψ_f`` [Wb].
     pole_pairs:
-        Polpaarzahl ``p``.
+        Number of pole pairs ``p``.
     inertia:
-        Trägheitsmoment ``J`` [kg·m²].
+        Moment of inertia ``J`` [kg·m²].
     friction:
-        Viskose Reibungskonstante ``B`` [Nm·s].
+        Viscous friction constant ``B`` [Nm·s].
     """
 
     r_s: float = 0.5
@@ -210,10 +210,10 @@ class PMSM:
         theta_e = p * theta_m
         omega_e = p * omega_m
 
-        # Spannungsraumzeiger ins rotorfeste dq-System drehen
+        # rotate the voltage space vector into the rotor (dq) frame
         v_d, v_q = park(v_alpha, v_beta, theta_e)
 
-        # Strom-Dynamik
+        # current dynamics
         di_d = (v_d - self.r_s * i_d + omega_e * self.l_q * i_q) / self.l_d
         di_q = (
             v_q
@@ -221,7 +221,7 @@ class PMSM:
             - omega_e * (self.l_d * i_d + self.flux_linkage)
         ) / self.l_q
 
-        # Drehmoment (inkl. Reluktanzanteil)
+        # torque (incl. reluctance component)
         torque = 1.5 * p * (
             self.flux_linkage * i_q + (self.l_d - self.l_q) * i_d * i_q
         )

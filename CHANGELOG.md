@@ -1,33 +1,33 @@
 # Changelog
 
-Alle nennenswerten Änderungen an diesem Projekt werden hier dokumentiert.
-Das Format orientiert sich an [Keep a Changelog](https://keepachangelog.com/de/1.0.0/).
+All notable changes to this project are documented here.
+The format is based on [Keep a Changelog](https://keepachangelog.com/de/1.0.0/).
 
 ## [0.1.0] – 2026-06-30
 
-### Hinzugefügt
+### Added
 
-* **Leistungsteil**
-  * `Rectifier` – ungesteuerte B6-Diodenbrücke (`V_dc ≈ 1.35·V_LL`)
-  * `DCLink` – Zwischenkreis-Kondensator, steif oder dynamisch (Rückspeise-Überspannung)
-  * `Inverter` – 2-Level-Spannungswechselrichter (Mittelwertmodell) mit SVPWM
+* **Power stage**
+  * `Rectifier` – uncontrolled B6 diode bridge (`V_dc ≈ 1.35·V_LL`)
+  * `DCLink` – DC-link capacitor, stiff or dynamic (regeneration overvoltage)
+  * `Inverter` – 2-level voltage-source inverter (averaged model) with SVPWM
 * **Modulation** (`pwm`)
-  * Sinus-PWM und Raumzeigermodulation (SVPWM via Min/Max-Nullsystem-Injektion)
-  * Mittelwertmodell der Strangspannungen, Sektorbestimmung
-* **Maschinen** (`motor`)
-  * `InductionMotor` – Asynchronmaschine im stationären αβ-Modell
-  * `PMSM` – permanenterregte Synchronmaschine im rotorfesten dq-Modell
-* **Regelung**
-  * `VFControl` – skalare U/f-Kennliniensteuerung mit Spannungsanhebung und Rampe
-  * `FOCPMSM`, `FOCInduction` – feldorientierte Regelung (PMSM & indirekte IRFOC)
-  * `PIController` mit Anti-Windup (Back-Calculation), `RateLimiter`, `LowPassFilter`
-* **Transformationen** (`transforms`) – Clarke/Park (amplituden-invariant)
-* **Schutz** (`protection`) – Über-/Unterspannung, Überstrom, Überdrehzahl, I²t-Thermomodell
+  * Sinusoidal PWM and space-vector modulation (SVPWM via min/max zero-sequence injection)
+  * Averaged model of the phase voltages, sector determination
+* **Machines** (`motor`)
+  * `InductionMotor` – induction machine in the stationary αβ model
+  * `PMSM` – permanent-magnet synchronous machine in the rotor (dq) model
+* **Control**
+  * `VFControl` – scalar V/f characteristic control with voltage boost and ramp
+  * `FOCPMSM`, `FOCInduction` – field-oriented control (PMSM & indirect IRFOC)
+  * `PIController` with anti-windup (back-calculation), `RateLimiter`, `LowPassFilter`
+* **Transformations** (`transforms`) – Clarke/Park (amplitude-invariant)
+* **Protection** (`protection`) – over-/undervoltage, overcurrent, overspeed, I²t thermal model
 * **Simulation**
-  * `rk4_step` (Runge-Kutta 4. Ordnung), `SimulationResult` mit Ausregelzeit-Schätzung
-  * `Frequenzumrichter` – Gesamtmodell des geschlossenen Regelkreises
-  * Lastvorgabe als Konstante, `f(t)` oder zustandsabhängig `f(t, meas)` (passive Lasten)
+  * `rk4_step` (4th-order Runge-Kutta), `SimulationResult` with settling-time estimation
+  * `Frequenzumrichter` – complete model of the closed control loop
+  * Load specification as a constant, `f(t)`, or state-dependent `f(t, meas)` (passive loads)
 * **Factory** – `build_vf_drive`, `build_foc_pmsm_drive`, `build_foc_induction_drive`
-* **Beispiele** – 5 lauffähige Skripte mit Plots (Anlauf, Reversierung, SVPWM, Schutz, Transformationen)
-* **Tests** – 76 Einheits- und Integrationstests
-* **Dokumentation** – Theorie, Regelung, Architektur (`docs/`)
+* **Examples** – 5 runnable scripts with plots (ramp-up, reversal, SVPWM, protection, transformations)
+* **Tests** – 76 unit and integration tests
+* **Documentation** – theory, control, architecture (`docs/`)
