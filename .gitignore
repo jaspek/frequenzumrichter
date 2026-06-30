@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+*.egg
+build/
+dist/
+.eggs/
+
+# Virtuelle Umgebungen
+.venv/
+venv/
+env/
+
+# Test- / Tooling-Caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Beispiel-Ausgaben (Plots)
+examples/output/
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store

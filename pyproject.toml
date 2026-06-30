@@ -1,0 +1,52 @@
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "frequenzumrichter"
+version = "0.1.0"
+description = "Simulation eines Frequenzumrichters (VFD): Leistungsteil, U/f- und feldorientierte Regelung von Asynchron- und Synchronmaschinen."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "frequenzumrichter contributors" }]
+keywords = [
+    "frequenzumrichter",
+    "vfd",
+    "variable-frequency-drive",
+    "motor-control",
+    "field-oriented-control",
+    "foc",
+    "svpwm",
+    "induction-motor",
+    "pmsm",
+    "power-electronics",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "Intended Audience :: Education",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Topic :: Scientific/Engineering",
+]
+dependencies = ["numpy>=1.21"]
+
+[project.optional-dependencies]
+plot = ["matplotlib>=3.4"]
+dev = ["pytest>=7.0", "matplotlib>=3.4"]
+
+[project.urls]
+Homepage = "https://github.com/jaspek/frequenzumrichter"
+Repository = "https://github.com/jaspek/frequenzumrichter"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py39"
